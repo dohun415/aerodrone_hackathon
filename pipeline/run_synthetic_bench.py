@@ -12,8 +12,9 @@ from pathlib import Path
 import numpy as np
 
 sys.path.append(str(Path(__file__).resolve().parent))
-from baselines.sift_baseline import register_sift
-from learned.loftr_run import register_loftr
+sys.path.append(str(Path(__file__).resolve().parent / "ai_matching"))
+from sift_baseline import register_sift
+from loftr_run import register_loftr
 from metrics import reprojection_rmse, summarize_matches, known_transform_error
 
 
