@@ -1,0 +1,28 @@
+[
+  {
+    "method": "SIFT+RANSAC",
+    "n_matches": 639,
+    "n_inliers": 638,
+    "inlier_ratio": 0.9984,
+    "rmse_px": 0.262,
+    "rmse_m": 2.621,
+    "elapsed_s": 0.205,
+    "corner_err_px_mean": 0.051,
+    "corner_err_px_max": 0.071,
+    "corner_err_m_mean": 0.507,
+    "corner_err_m_max": 0.708
+  },
+  {
+    "method": "LoFTR(kornia)",
+    "n_matches": 5484,
+    "n_inliers": 5478,
+    "inlier_ratio": 0.9989,
+    "rmse_px": 0.676,
+    "rmse_m": 6.76,
+    "elapsed_s": 1.621,
+    "corner_err_px_mean": 0.119,
+    "corner_err_px_max": 0.172,
+    "corner_err_m_mean": 1.194,
+    "corner_err_m_max": 1.719
+  }
+]

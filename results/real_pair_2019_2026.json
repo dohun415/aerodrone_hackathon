@@ -1,0 +1,20 @@
+[
+  {
+    "method": "SIFT+RANSAC",
+    "n_matches": 25,
+    "n_inliers": 8,
+    "inlier_ratio": 0.32,
+    "rmse_px": 0.424,
+    "rmse_m": 4.243,
+    "elapsed_s": 0.328
+  },
+  {
+    "method": "LoFTR(kornia)",
+    "n_matches": 144,
+    "n_inliers": 110,
+    "inlier_ratio": 0.7639,
+    "rmse_px": 1.424,
+    "rmse_m": 14.236,
+    "elapsed_s": 1.183
+  }
+]

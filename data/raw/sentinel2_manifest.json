@@ -1,0 +1,24 @@
+[
+  {
+    "id": "S2C_MSIL2A_20260916T022531_R046_T52SBG_20260916T055253",
+    "datetime": "2026-09-16T02:25:31.025000Z",
+    "cloud_cover": 0.005494,
+    "files": {
+      "B04": "data/raw/s2_2026-09-16_52SBG_B04.tif",
+      "B03": "data/raw/s2_2026-09-16_52SBG_B03.tif",
+      "B02": "data/raw/s2_2026-09-16_52SBG_B02.tif",
+      "B08": "data/raw/s2_2026-09-16_52SBG_B08.tif"
+    }
+  },
+  {
+    "id": "S2B_MSIL2A_20190918T022549_R046_T52SBG_20201004T143635",
+    "datetime": "2019-09-18T02:25:49.024000Z",
+    "cloud_cover": 0.030088,
+    "files": {
+      "B04": "data/raw/s2_2019-09-18_52SBG_B04.tif",
+      "B03": "data/raw/s2_2019-09-18_52SBG_B03.tif",
+      "B02": "data/raw/s2_2019-09-18_52SBG_B02.tif",
+      "B08": "data/raw/s2_2019-09-18_52SBG_B08.tif"
+    }
+  }
+]
