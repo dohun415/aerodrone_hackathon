@@ -1,0 +1,76 @@
+{
+  "flat_terrain": {
+    "before": {
+      "SIFT": {
+        "n_matches": 2501,
+        "n_inliers": 2470,
+        "inlier_ratio": 0.988,
+        "rmse_m": 5.131
+      },
+      "LoFTR": {
+        "n_matches": 3435,
+        "n_inliers": 3335,
+        "inlier_ratio": 0.971,
+        "rmse_m": 11.611
+      }
+    },
+    "after": {
+      "SIFT": {
+        "n_matches": 5292,
+        "n_inliers": 5281,
+        "inlier_ratio": 0.998,
+        "rmse_m": 2.679
+      },
+      "LoFTR": {
+        "n_matches": 6624,
+        "n_inliers": 6624,
+        "inlier_ratio": 1.0,
+        "rmse_m": 2.731
+      }
+    }
+  },
+  "hill_terrain": {
+    "before": {
+      "SIFT": {
+        "n_matches": 2464,
+        "n_inliers": 2028,
+        "inlier_ratio": 0.823,
+        "rmse_m": 9.502,
+        "hotspot_n_matches": 830,
+        "hotspot_inlier_ratio": 0.507,
+        "outside_inlier_ratio": 0.983
+      },
+      "LoFTR": {
+        "n_matches": 3501,
+        "n_inliers": 3187,
+        "inlier_ratio": 0.91,
+        "rmse_m": 12.724,
+        "hotspot_n_matches": 460,
+        "hotspot_inlier_ratio": 0.561,
+        "outside_inlier_ratio": 0.963
+      }
+    },
+    "after": {
+      "SIFT": {
+        "n_matches": 5121,
+        "n_inliers": 4564,
+        "inlier_ratio": 0.891,
+        "rmse_m": 7.621,
+        "hotspot_n_matches": 659,
+        "hotspot_inlier_ratio": 0.47,
+        "outside_inlier_ratio": 0.953
+      },
+      "LoFTR": {
+        "n_matches": 6597,
+        "n_inliers": 6313,
+        "inlier_ratio": 0.957,
+        "rmse_m": 4.214,
+        "hotspot_n_matches": 526,
+        "hotspot_inlier_ratio": 0.677,
+        "outside_inlier_ratio": 0.981
+      }
+    }
+  },
+  "hill_shift_px_max": 25,
+  "note": "실제 드론 사진이 없어 위성 정사영상에 합성 원근왜곡을 줘서 검증. 평지에서는 호모그래피 보정만으로 정합이 크게 개선되지만, 언덕(국소 기복변위)이 있으면 전역 호모그래피로는 그 지역 오차가 남는다 — 실제 절벽·언덕 지형에는 OpenDroneMap(다시점 SfM)의 DEM 기반 정사보정이 필요하다는 근거."
+}

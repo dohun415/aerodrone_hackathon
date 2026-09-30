@@ -24,19 +24,20 @@
 
 ```
 pipeline/
-├─ 00_fetch_data.py       # 데이터 확보
-├─ 02_global_shift.py     # ② 전역 이동 보정
-├─ 03_stable_mask.py      # ③ 수면·모래 마스킹
-├─ ai_matching/           # ④ AI 정밀정합
-│  ├─ sift_baseline.py    #    - 베이스라인(고전)
-│  └─ loftr_run.py        #    - AI(딥러닝 조밀매칭)
-├─ 05_local_correction.py # ⑤ 국소 보정
-├─ 06_quality_report.py   # ⑥ 품질 검증 (합격 기준 판정 + LoD)
-├─ shift_sweep_demo.py    # 시연 화면 ④ "어긋남 슬라이더"
-├─ make_synthetic_pair.py # 정답을 아는 합성 벤치마크 생성
-├─ run_synthetic_bench.py # 합성 벤치마크 실행
-├─ visualize.py           # 결과 그림 생성
-└─ metrics.py             # 공통 지표 계산
+├─ 00_fetch_data.py            # 데이터 확보
+├─ 01_drone_view_rectify.py    # ①' 드론 시점 보정 (경사→나딜 근사)
+├─ 02_global_shift.py          # ② 전역 이동 보정
+├─ 03_stable_mask.py           # ③ 수면·모래 마스킹
+├─ ai_matching/                # ④ AI 정밀정합
+│  ├─ sift_baseline.py         #    - 베이스라인(고전)
+│  └─ loftr_run.py             #    - AI(딥러닝 조밀매칭)
+├─ 05_local_correction.py      # ⑤ 국소 보정
+├─ 06_quality_report.py        # ⑥ 품질 검증 (합격 기준 판정 + LoD)
+├─ shift_sweep_demo.py         # 시연 화면 ④ "어긋남 슬라이더"
+├─ make_synthetic_pair.py      # 정답을 아는 합성 벤치마크 생성
+├─ run_synthetic_bench.py      # 합성 벤치마크 실행
+├─ visualize.py                # 결과 그림 생성
+└─ metrics.py                  # 공통 지표 계산
 ```
 
 숫자로 "①좌표통일"에 해당하는 별도 스크립트는 없다 — `00_fetch_data.py`가
@@ -77,6 +78,73 @@ python pipeline/00_fetch_data.py --bands B04,B03,B02,B08
 맞춰 저장한다. 회사 실데이터(SkySat 0.5m)가 오면 `gdalwarp -t_srs
 -tr`로 Sentinel-2(10m) 격자에 맞추거나 그 반대로 리샘플링하는
 단계가 별도로 필요 — 아직 실행 못 함 (SkySat 파일 없음).
+
+---
+
+## ①' 드론 시점 보정 — `01_drone_view_rectify.py`
+
+**문제의식**: 위성(SkySat)도 28.9° 경사촬영이지만 Planet이 자체
+DEM으로 이미 정사보정해서 "위에서 본" 형태(`ortho_visual`)로
+배포한다. 반면 드론 원본 사진은 이런 보정이 안 된 원근(perspective)
+사진이라, 위성 정사영상과 드론 사진을 곧바로 LightGlue/LoFTR에
+넣으면 "다른 곳이라서"가 아니라 "투영 방식이 달라서" 매칭이 잘 안
+될 위험이 있다. **그래서 정합 전에 드론 사진을 위성과 같은 투영
+(나딜/정사)으로 먼저 맞추는 전처리 단계**를 검증했다.
+
+**두 가지 경로**:
+1. **정석**: 겹치는 드론 사진 여러 장 → OpenDroneMap(SfM)으로 실제
+   DSM을 복원해 정사영상 생성. 절벽·언덕의 기복변위까지 기하학적으로
+   정확히 보정됨. 드론 사진을 여러 장 확보하면 이게 정답.
+2. **이 스크립트(근사)**: 사진이 한두 장뿐이거나 ODM 돌리기 전에
+   빠르게 확인하고 싶을 때, 드론 텔레메트리(짐벌 피치각·고도 — 트랙A
+   SRT/EXIF 추출 계획과 연결됨)로 호모그래피 하나를 계산해 평면
+   가정 하에 원근을 되돌린다. **평지에서만 정확**하고, 높이가 있는
+   지형(개머리언덕·절벽)에는 기복변위가 남는다는 게 아래 실험의
+   핵심 발견.
+
+**검증 방법**: 아직 실제 드론 사진이 없어서, 위성 정사영상(이미
+나딜)에 사다리꼴(keystone) 원근왜곡을 인위적으로 줘서 "드론이
+찍었을 법한 오블리크 사진"을 합성 → 보정 전/후로 SIFT·LoFTR 정합
+성능을 비교. 언덕이 있는 경우도 별도로 합성해서 한계를 확인.
+
+**결과**:
+
+| 시나리오 | 상태 | SIFT 인라이어 | SIFT RMSE | LoFTR 인라이어 | LoFTR RMSE |
+|---|---|---|---|---|---|
+| 평지 | 보정 전 | 99% | 5.13m | 97% | 11.61m |
+| 평지 | **보정 후** | 100% | **2.68m** | 100% | **2.73m** |
+| 언덕 포함 | 보정 전 | 82% | 9.50m | 91% | 12.72m |
+| 언덕 포함 | 보정 후 | 89% | 7.62m | 96% | 4.21m |
+
+**언덕 구역만 따로 보면** (전체 RANSAC 인라이어 비율에는 안 잡히는 부분):
+
+| | SIFT | LoFTR |
+|---|---|---|
+| 언덕 안 인라이어율 (보정 후) | **47%** | **68%** |
+| 언덕 밖 인라이어율 (보정 후) | 95% | 98% |
+
+![드론 시점 보정](results/figures/06_drone_view_rectify.png)
+
+**의미**: 평지에서는 시점 보정이 확실히 도움된다 — RMSE가 절반
+가까이 줄었다. 그런데 전체 인라이어 비율만 보면 평지든 언덕이든
+"보정 후 89~100%"로 꽤 좋아 보인다 — **이게 함정**이다. RANSAC은
+전역 모델(호모그래피 하나)과 안 맞는 언덕 지역의 매칭점을 그냥
+이상치로 버려버리기 때문에, 전체 통계에는 언덕에서의 실패가
+가려진다. 언덕 구역만 따로 떼어 보면 인라이어율이 47~68%로 뚝
+떨어져서 언덕 밖(95~98%)과 뚜렷하게 차이 난다 — **보정 후에도
+남는다.**
+
+이건 두 가지를 동시에 증명한다: ① 평면 가정 호모그래피 보정은
+실제로 정합을 개선한다(평지에서), ② 그러나 굴업도의 개머리언덕·
+절벽 같은 진짜 기복이 있는 지형에는 이 방법만으로는 부족하고,
+**전역 RMSE만 보고하면 이 실패를 놓친다** — 회의록 "4장 지형별
+정합 기준"이 지형마다 오차를 따로 집계해야 한다고 한 이유를 다시
+한번 실증. 실제 언덕 지역은 결국 OpenDroneMap의 DEM 기반 정사보정
+(또는 ⑤ 국소보정)이 맡아야 한다는 역할 분담이 명확해졌다.
+
+```bash
+python pipeline/01_drone_view_rectify.py --top_margin 0.22
+```
 
 ---
 
@@ -298,6 +366,7 @@ python pipeline/shift_sweep_demo.py
 |---|---|---|
 | 데이터 확보 | ✅ 완료 | Sentinel-2 실증, SkySat 실파일 대기 |
 | ① 좌표 통일 | ✅ 완료 | fetch 단계에 내장 |
+| ①' 드론 시점 보정 | ✅ 완료(합성 검증) | 평지 개선 확인, 언덕 잔차 한계도 확인 — 실제 드론 사진 없음 |
 | ② 전역 보정 | ✅ 완료 | 진짜 AROSICS 성공(섬 위치, 신뢰도 85%) + phase_cross_correlation 교차검증 |
 | ③ 마스킹 | ✅ 완료 | NDWI vs RGB-only IoU 0.33 확인 |
 | ④ AI 정밀정합 | 🟡 부분 완료 | SIFT·LoFTR 완료, LightGlue 미실행 |
@@ -315,6 +384,13 @@ python pipeline/shift_sweep_demo.py
 3. 시연 화면 ①②③ Streamlit 대시보드로 통합 (회의록 5-4)
 4. 지형별(구조물/암반/평지/산지) 자동 분류 — 지금은 물/비물 이진 마스킹까지만 구현
 5. ~~AROSICS 설치~~ — ✅ 해결됨 (Homebrew 고아 디렉터리 정리 후 정상 설치, ②단계 참고)
+6. 드론 텔레메트리(SRT/EXIF 짐벌 피치각·고도) 추출 스크립트 — 실제
+   드론 영상이 생기면 `01_drone_view_rectify.py`가 지금은 임의로
+   가정하는 원근왜곡 강도(`--top_margin`) 대신 진짜 촬영 각도로
+   호모그래피를 계산하도록 연결
+7. 실제 드론 사진(여러 장) 확보 후 OpenDroneMap으로 진짜 DSM 기반
+   정사영상 생성 — ①'단계가 예측한 "언덕에서는 한계가 있다"는 걸
+   실제 지형으로도 확인
 
 ## 빠른 재현 (처음부터)
 
@@ -323,6 +399,7 @@ python3 -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 
 python pipeline/00_fetch_data.py --bands B04,B03,B02,B08
+python pipeline/01_drone_view_rectify.py
 python pipeline/02_global_shift.py
 python pipeline/03_stable_mask.py
 python pipeline/ai_matching/sift_baseline.py --src data/raw/s2_2019-09-18_52SBG_B04.tif --dst data/raw/s2_2026-09-16_52SBG_B04.tif
