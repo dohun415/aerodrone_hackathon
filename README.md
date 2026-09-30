@@ -1,6 +1,6 @@
 # Task4_verify — 정합 파이프라인 실행 기록
 
-쓰리디랩스 과제4(해커톤) 구현 담당(컴퓨터공학) 실습 기록. 팀 노션의
+팀 노션의
 [「회의 정리 — 정합 실패 요인·해결·기준 & 시연 파이프라인」](https://app.notion.com/p/3eadbb7a73b1811c9c7afdb1dc84aa06)과
 [「과제4 — 기업 배포자료 분석 & 프로젝트 전략」](https://app.notion.com/p/4-3e3dbb7a73b1819b976bee87cc15d242)에서
 확정한 **6단계 정합 파이프라인**을 실제로 하나씩 돌려보고, 무엇이
@@ -85,35 +85,52 @@ python pipeline/00_fetch_data.py --bands B04,B03,B02,B08
 **검증할 것**: 회의록의 "AROSICS Global"(GCR 0.17에서 오는 절대측위
 오차 제거)을 실제로 돌릴 수 있는가.
 
-**막힌 것**: 이 macOS 환경은 Homebrew 자체가 깨져 있어(여러
-`/opt/homebrew/opt/*`가 심볼릭 링크가 아니라 고아 디렉터리 상태)
-`brew install gdal`이 freetype → fontconfig 순으로 연쇄 실패. `pip
-install arosics`는 `gdal-config`를 요구해서 GDAL 없이는 설치
-자체가 안 됨. (자세한 진행 로그는 커밋 히스토리 참고. 이 저장소나
-정합 로직과 무관한, 이 컴퓨터의 Homebrew 문제.)
+**처음엔 막혔던 것 → 해결**: 이 macOS 환경은 Homebrew 자체가 깨져
+있었다(`freetype`·`fontconfig`·`little-cms2`의 `/opt/homebrew/opt/*`가
+심볼릭 링크가 아니라 이전 설치에서 남은 고아 디렉터리 상태 —
+아마 예전에 비정상 종료된 brew 작업의 잔재). 그래서 `brew install
+gdal`이 링크 단계에서 연쇄 실패했고, `pip install arosics`도
+`gdal-config`를 못 찾아 설치가 안 됐다.
 
-**대안**: 같은 역할(영상 전체의 X/Y 서브픽셀 이동량 추정)을
-`scikit-image`의 `phase_cross_correlation`(순수 pip, 정합
-참고자료 페이지에도 "AROSICS 교차검증용"으로 함께 소개된 도구)으로
-구현.
+**해결 방법** (이 저장소·정합 로직과는 무관한, 이 컴퓨터의 Homebrew
+자체를 고친 것):
+```bash
+# 고아 디렉터리(심볼릭 링크 아님)를 찾아서 지우고 재연결
+for d in /opt/homebrew/opt/*; do
+  [ -e "$d" ] && [ ! -L "$d" ] && echo "$d"
+done
+rm -rf /opt/homebrew/opt/freetype /opt/homebrew/opt/fontconfig /opt/homebrew/opt/little-cms2
+brew link --overwrite freetype fontconfig little-cms2 numpy
+brew install gdal   # 이제 끝까지 성공
+pip install arosics # gdal-config를 찾아서 정상 설치
+```
 
-**결과**:
+**결과 — 진짜 AROSICS로 재실행**:
 
-| 실험 | dx | dy | translation_error |
-|---|---|---|---|
-| 실제 2019 vs 2026 Sentinel-2 | -3.8 m | 9.4 m | 1.0 (최대, 신뢰도 낮음) |
-| 합성 벤치마크 (정답: 120m, -70m 이동 + 회전0.8°) | 실제론 -124m | 45m | 1.0 |
+| 실행 위치 | 결과 |
+|---|---|
+| 영상 중앙(기본값) | ❌ `No match found in the given window` |
+| **섬(육지) 위치** (③단계 마스크로 찾은 좌표) | ✅ dx **-4.4m**, dy **-8.6m**, 신뢰도 **85.2%** |
+| phase_cross_correlation (교차검증) | dx -3.8m, dy 9.4m |
 
-**의미**: 두 실험 모두 `translation_error`가 최댓값(1.0)으로
-나왔다 — phase correlation은 **순수 이동**만 정확히 잡고, 실제
-데이터(콘텐츠가 다른 7년 시차)나 합성 데이터(회전·스케일이 섞임)
-둘 다에서는 신뢰도가 낮다. 이건 실패가 아니라 **파이프라인 설계가
-왜 이렇게 짜여 있는지에 대한 증거**다: 전역 보정 하나로 안 되니까
-다음 단계(④ AI 정밀정합, 호모그래피 추정)가 필요하다는 회의록의
-논리를 데이터로 확인한 것.
+**의미**: 이미지 중앙에서 AROSICS가 실패한 것 자체가 중요한
+발견이다 — 우리 AOI는 98.8%가 바다(③단계 참고)라서 기본 매칭
+윈도우가 특징점 없는 물 위에 놓이면 전역보정조차 안 된다. 매칭
+윈도우를 섬 위로 옮기자마자 신뢰도 85%로 성공했고, 그 결과가
+독립적인 다른 방법(phase_cross_correlation)과도 방향·크기가
+비슷하게 나와 서로 교차검증됐다. **회의록 "4장 지형별 정합
+기준"(안정 지형에서 기준점을 뽑아야 한다)이 이론이 아니라 실제로
+전역보정 성공 여부를 가르는 조건이라는 걸 직접 확인**한 셈.
+또한 두 방법이 준 절대 이동량(4~9m)은 Sentinel-2 L2A 공식 규격
+정확도(<12m) 이내라서, 이 두 장면은 원래도 잘 정렬돼 있었다는
+뜻이기도 하다 — ⑤단계 결과와도 일관됨.
 
 ```bash
-python pipeline/02_global_shift.py --ref data/raw/s2_2019-09-18_52SBG_B04.tif --mov data/raw/s2_2026-09-16_52SBG_B04.tif
+# wp_x, wp_y는 육지 중심 map좌표 (03_stable_mask.py 실행 후 알 수 있음)
+python pipeline/02_global_shift.py \
+  --ref data/raw/s2_2019-09-18_52SBG_B04.tif \
+  --mov data/raw/s2_2026-09-16_52SBG_B04.tif \
+  --wp_x 232210.74 --wp_y 4119811.13
 ```
 
 ---
@@ -188,10 +205,12 @@ python pipeline/make_synthetic_pair.py && python pipeline/run_synthetic_bench.py
 
 **검증할 것**: 회의록의 "AROSICS Local / Elastix"(기복변위처럼
 영역마다 다르게 어긋나는 것을 격자 단위로 펴는 것)를 실제로 돌릴
-수 있는가. AROSICS는 ②와 같은 이유로 설치 불가.
+수 있는가.
 
-**방법**: `itk-elastix`(순수 pip, GDAL 불필요 — 설치 성공)로
-B-스플라인 비강체 정합 실행.
+**방법**: AROSICS는 이제 설치돼 있지만(②단계 참고), AROSICS
+Local은 격자 전체에 촘촘한 tie point가 필요해서 우리처럼 98.8%가
+바다인 장면엔 안 맞다 — 대신 `itk-elastix`(순수 pip)로 B-스플라인
+비강체 정합을 실행해 같은 역할을 확인했다.
 
 **결과**: 보정 전후 잔차 표준편차가 0.1909 → 0.1906 (**0.1%만
 감소**).
@@ -279,10 +298,10 @@ python pipeline/shift_sweep_demo.py
 |---|---|---|
 | 데이터 확보 | ✅ 완료 | Sentinel-2 실증, SkySat 실파일 대기 |
 | ① 좌표 통일 | ✅ 완료 | fetch 단계에 내장 |
-| ② 전역 보정 | ✅ 완료(대안 도구) | AROSICS 미설치, phase_cross_correlation 사용 |
+| ② 전역 보정 | ✅ 완료 | 진짜 AROSICS 성공(섬 위치, 신뢰도 85%) + phase_cross_correlation 교차검증 |
 | ③ 마스킹 | ✅ 완료 | NDWI vs RGB-only IoU 0.33 확인 |
 | ④ AI 정밀정합 | 🟡 부분 완료 | SIFT·LoFTR 완료, LightGlue 미실행 |
-| ⑤ 국소 보정 | ✅ 완료(대안 도구) | AROSICS 미설치, itk-elastix 사용 |
+| ⑤ 국소 보정 | ✅ 완료(대안 도구) | AROSICS Local은 우리 AOI(바다多)에 부적합, itk-elastix 사용 |
 | ⑥ 품질 검증 | ✅ 완료 | 합격기준 표 + LoD 구현 |
 | 시연 화면 ④ | ✅ 완료 | 핵심 결과, 그대로 발표 슬라이드로 사용 가능 |
 | 시연 화면 ①②③⑤ | ⬜ 미착수 | Streamlit/Gradio 대시보드로 통합 필요 |
@@ -295,7 +314,7 @@ python pipeline/shift_sweep_demo.py
 2. LightGlue 추가 (kornia에 이미 있음, `ai_matching/lightglue_run.py`로 SIFT/LoFTR와 같은 패턴으로 추가하면 됨)
 3. 시연 화면 ①②③ Streamlit 대시보드로 통합 (회의록 5-4)
 4. 지형별(구조물/암반/평지/산지) 자동 분류 — 지금은 물/비물 이진 마스킹까지만 구현
-5. AROSICS: 다른(정상) 환경에서 `brew install gdal && pip install arosics`로 재시도, 또는 `brew doctor`로 이 Mac의 Homebrew 자체를 먼저 정리
+5. ~~AROSICS 설치~~ — ✅ 해결됨 (Homebrew 고아 디렉터리 정리 후 정상 설치, ②단계 참고)
 
 ## 빠른 재현 (처음부터)
 
@@ -321,15 +340,19 @@ python pipeline/visualize.py
 |---|---|---|
 | [rasterio](https://rasterio.readthedocs.io/) | GeoTIFF 읽기/쓰기, 좌표 변환 | BSD-3-Clause |
 | [pystac-client](https://github.com/stac-utils/pystac-client) / [planetary-computer](https://github.com/microsoft/planetary-computer-sdk-for-python) | Sentinel-2 검색·다운로드 | Apache-2.0 / MIT |
-| [scikit-image](https://scikit-image.org/) | phase_cross_correlation(②), Otsu(③) | BSD-3-Clause |
+| [AROSICS](https://github.com/GFZ/arosics) | 전역 이동 보정(②) | Apache-2.0 |
+| [scikit-image](https://scikit-image.org/) | phase_cross_correlation(② 교차검증), Otsu(③) | BSD-3-Clause |
 | [OpenCV](https://opencv.org/) | SIFT, RANSAC 호모그래피 | Apache-2.0 |
 | [kornia](https://github.com/kornia/kornia) (LoFTR) | 딥러닝 조밀 매칭 | Apache-2.0 |
 | [itk-elastix](https://github.com/InsightSoftwareConsortium/ITKElastix) | B-스플라인 국소 보정(⑤) | Apache-2.0 |
 | [PyTorch](https://pytorch.org/) | kornia 백엔드 | BSD-3-Clause |
 
-**설치 실패한 것**: [AROSICS](https://github.com/GFZ/arosics) (Apache-2.0) — 이 macOS 환경의 Homebrew
-GDAL 설치 실패로 인해. 정합 참고자료 페이지가 추천한 1순위 도구였으나
-②·⑤ 모두 대안 도구로 같은 역할을 대체 구현.
+**Homebrew 이슈 해결됨** — 이전 버전 README는 이 macOS 환경의 Homebrew가
+깨져 있어(`freetype`/`fontconfig`/`little-cms2` 고아 디렉터리) AROSICS
+설치가 불가능하다고 기록했었다. 고아 디렉터리를 지우고 재연결한 뒤
+`brew install gdal`이 정상 완료됐고, AROSICS도 정상 설치돼 ②단계는
+이제 대안 도구가 아니라 정합 참고자료 페이지가 추천한 1순위 도구를
+그대로 쓴다.
 
 ## 데이터 출처
 

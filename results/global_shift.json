@@ -1,8 +1,19 @@
 {
-  "dy_px": 0.9399999976158142,
-  "dx_px": -0.3799999952316284,
-  "translation_error": 1.0,
-  "elapsed_s": 0.10464215278625488,
-  "dx_m": -3.8,
-  "dy_m": 9.4
+  "arosics_center_error": "No match found in the given window.",
+  "arosics_on_land": {
+    "method": "AROSICS COREG (Global)",
+    "dx_px": -0.4431138038635254,
+    "dy_px": 0.8575137257575989,
+    "dx_m": -4.431138038635254,
+    "dy_m": -8.575137257575989,
+    "reliability_pct": 85.15240735092127,
+    "elapsed_s": 0.05013585090637207
+  },
+  "phasecorr": {
+    "method": "phase_cross_correlation",
+    "dy_px": 0.9399999976158142,
+    "dx_px": -0.3799999952316284,
+    "translation_error": 1.0,
+    "elapsed_s": 0.10058999061584473
+  }
 }
