@@ -516,6 +516,17 @@ const colorOf=(z,R)=> (R.nTeams>1 ? TEAMC[(z.team-1)%TEAMC.length] : DAYC[(z.day
 const teamName=(t)=>TEAMN[t-1]||String(t);
 const navLinks=(name,lat,lon)=>`<a href="https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat.toFixed(6)},${lon.toFixed(6)}" target="_blank" rel="noopener">카카오맵 길찾기</a> · <a href="https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lon.toFixed(6)}&travelmode=walking" target="_blank" rel="noopener">구글 지도</a>`;
 let map=null, layers=null, zoneMarkers={}, depotMarker=null, meMarker=null, allBounds=null, fitted=false;
+// 출발지 제한: 정사영상 범위 안 + 땅(맨땅·숲) 또는 해안 2칸(20 m) 이내의 물(부두·선착장). 벗어나면 이유 문자열 반환
+function depotProblem(lon,lat){
+  if (D.basemap){ const b=D.basemap.bounds; if (lat<b[0]||lat>b[2]||lon<b[1]||lon>b[3]) return '정사영상 범위 밖'; }
+  if (!T) return null;
+  const [x,y]=ll2xy(lon,lat); const c=Math.floor((x-GX0)/CELL), r=Math.floor((GY0-y)/CELL);
+  if (r<0||r>=NR||c<0||c>=NC) return '지형 격자 밖';
+  const g=G[r*NC+c]; if (g===2||g===3) return null;
+  if (g===0) return '촬영되지 않은 영역';
+  for (let dr=-2;dr<=2;dr++) for (let dc=-2;dc<=2;dc++){ const rr=r+dr, cc=c+dc; if(rr<0||rr>=NR||cc<0||cc>=NC) continue; const gg=G[rr*NC+cc]; if (gg===2||gg===3) return null; }
+  return '해안에서 20 m 넘게 떨어진 바다';
+}
 function initMap(){
   const fb=$('#fallback');
   if (typeof L==='undefined'){ fb.style.display='block'; $('#maphint').textContent='인터넷 연결이 없어 인쇄용 지도(기본 설정)를 보여줍니다. 숫자·카드는 아래에서 계속 다시 계산됩니다.'; return; }
@@ -535,7 +546,9 @@ function initMap(){
   if (D.no_tiles){ map.options.maxZoom=20; map.setMaxZoom(20); }
   depotMarker=L.marker([depot.lat,depot.lon],{icon:L.divIcon({className:'',html:'<div class="dp" title="끌어서 출발지 변경">★</div>',iconSize:[30,30],iconAnchor:[15,15]}),zIndexOffset:2000,draggable:true}).addTo(map);
   depotMarker.bindTooltip('출발·집결지 (끌어서 옮길 수 있음)',{direction:'top',offset:[0,-12]});
-  depotMarker.on('dragend',()=>{ const ll=depotMarker.getLatLng(); depot={lon:ll.lng,lat:ll.lat,name:'지정 출발지'}; recompute(); });
+  depotMarker.on('dragend',()=>{ const ll=depotMarker.getLatLng(); const why=depotProblem(ll.lng,ll.lat);
+    if (why){ depotMarker.setLatLng([depot.lat,depot.lon]); $('#status').textContent='출발지를 옮길 수 없습니다: '+why+' — 정사영상 안의 땅이나 해안 20 m 이내(부두 포함)에만 둘 수 있습니다'; $('#status').style.color='#c0392b'; setTimeout(()=>{$('#status').style.color='';},4000); return; }
+    depot={lon:ll.lng,lat:ll.lat,name:'지정 출발지'}; recompute(); });
   allBounds=L.latLngBounds(D.objects.map(ob=>[ob.lat,ob.lon]).concat([[depot.lat,depot.lon]]));
   const refit=()=>{ const el=map.getContainer(); if(el.clientWidth>0&&el.clientHeight>0){ map.invalidateSize(); if(!fitted){ fitted=true; map.fitBounds(allBounds.pad(0.08),{animate:false}); } } };
   refit(); map.whenReady(refit); window.addEventListener('load',refit); setTimeout(refit,300); setTimeout(refit,1500);
@@ -782,7 +795,7 @@ def build_collect_html(plan: CollectPlan, out_html: str | Path, *, photos_dir: s
 <header><h1>{_esc(title)}</h1><p>조사일 {_esc(plan.survey_date)} · 출발·집결지 <b>{_esc(plan.depot['name'])}</b> (지도의 ★ 를 끌어서 바꿀 수 있음) · {'지형(물·숲·맨땅) 최단경로 반영' if terrain is not None else '직선 거리 × 우회 배수'}</p></header>""",
          '<div class="layout" id="layout"><aside class="side"><button class="side-open" onclick="toggleSide()">설정 열기 ▶</button>' + _control_panel(defaults, mats, terrain is not None, present_codes, artifact) + '</aside><main class="main">',
          '<div class="tiles" id="tiles"></div>',
-         '<div class="card"><h2>수거 지도</h2><p class="sub" id="maphint">번호 순서대로 이동합니다. 번호를 누르면 그 구역에서 수거할 물체 목록(사진·종류·크기·무게)이 패널로 뜨고, 점을 누르면 물체 하나의 정보가 나옵니다. ★ 출발지는 끌어서 옮기면 경로가 다시 계산됩니다.</p>',
+         '<div class="card"><h2>수거 지도</h2><p class="sub" id="maphint">번호 순서대로 이동합니다. 번호를 누르면 그 구역에서 수거할 물체 목록(사진·종류·크기·무게)이 패널로 뜨고, 점을 누르면 물체 하나의 정보가 나옵니다. ★ 출발지는 끌어서 옮기면 경로가 다시 계산됩니다 (정사영상 안의 땅·해안 20 m 이내에만 놓을 수 있음).</p>',
          '<div class="mapbtns" id="daybtns"></div>',
          f'<div id="map"><img id="fallback" class="fallback" style="display:none" src="{fallback or ""}" alt="수거 지도"><div class="busy" id="busy">계산 중…</div><div class="zpanel" id="zpanel"></div></div>',
          '<div class="legend" id="legend"></div></div>',
