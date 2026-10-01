@@ -1,0 +1,13 @@
+{
+  "label": "gulupdo_2026-08-12_vs_2026-09-16",
+  "ref": "data/raw/s2_2026-08-12_51SYB_B04.tif",
+  "mov": "data/raw/s2_2026-09-16_52SBG_B04.tif",
+  "steps": {
+    "01_drone_view_rectify": true,
+    "02_global_shift": true,
+    "03_stable_mask": true,
+    "04_ai_matching": true,
+    "05_local_correction": true,
+    "06_quality_report": true
+  }
+}

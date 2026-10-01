@@ -23,8 +23,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 import rasterio
 
-matplotlib.rcParams["font.family"] = "AppleGothic"
-matplotlib.rcParams["axes.unicode_minus"] = False
+# 한글 폰트는 OS마다 다르다(Windows 맑은 고딕 / macOS AppleGothic).
+from _compat import apply_korean_font
+apply_korean_font()
 
 sys.path.append("pipeline")
 sys.path.append("pipeline/ai_matching")
@@ -91,7 +92,7 @@ def main():
     rows = run_sweep(img)
 
     Path("results").mkdir(exist_ok=True)
-    Path("results/shift_sweep.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2))
+    Path("results/shift_sweep.json").write_text(json.dumps(rows, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
 
     shifts = [r["shift_px"] for r in rows]
     naive = [r["naive_false_change_pct"] for r in rows]

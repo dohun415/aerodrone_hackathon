@@ -107,7 +107,7 @@ def main():
         )
 
     meta_path = Path(args.out) / "sentinel2_manifest.json"
-    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     print(f"메타데이터: {meta_path}")
 
 

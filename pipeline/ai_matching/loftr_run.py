@@ -9,7 +9,20 @@ import numpy as np
 import torch
 import kornia.feature as KF
 
-_DEVICE = "mps" if torch.backends.mps.is_available() else "cpu"
+import sys
+from pathlib import Path
+
+# _compat는 pipeline/ 에 있다 (이 파일은 pipeline/ai_matching/).
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from _compat import ensure_ssl_certs, pick_torch_device
+
+# LoFTR 사전학습 가중치를 받는 서버의 CA가 Windows 기본 인증서
+# 저장소에 없어서 첫 실행이 SSL 오류로 죽는다 — certifi 번들을 쓰게 한다.
+ensure_ssl_certs()
+
+# 원래는 "mps"(Apple GPU) 고정이었다 — Windows의 NVIDIA GPU를 쓰려면
+# CUDA를 먼저 확인해야 한다. CUDA > MPS > CPU 순으로 자동 선택.
+_DEVICE = pick_torch_device()
 _MATCHER = None
 
 
@@ -71,12 +84,9 @@ def register_loftr(img_src, img_dst, conf_thresh=0.5, max_side=800, ransac_thres
 if __name__ == "__main__":
     import argparse
     import json
-    import sys
-    from pathlib import Path
 
     import rasterio
 
-    sys.path.append(str(Path(__file__).resolve().parents[1]))
     from metrics import reprojection_rmse, summarize_matches
 
     ap = argparse.ArgumentParser()

@@ -25,6 +25,13 @@ import numpy as np
 import rasterio
 from skimage.registration import phase_cross_correlation
 
+# 저장소 경로에 한글이 있으면(예: ...\Desktop\드론\...) GDAL 번들 PROJ가
+# proj.db를 못 찾아 좌표계가 조용히 어긋날 수 있다. arosix/osgeo import
+# '전에' PROJ 데이터 경로를 ASCII로 돌려놓는다.
+from _compat import ensure_ascii_proj_data
+
+ensure_ascii_proj_data()
+
 try:
     from arosics import COREG
     AROSICS_AVAILABLE = True
@@ -108,4 +115,4 @@ if __name__ == "__main__":
 
     print(json.dumps(result, ensure_ascii=False, indent=2))
     Path("results").mkdir(exist_ok=True)
-    Path("results/global_shift.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
+    Path("results/global_shift.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")

@@ -1,0 +1,154 @@
+{
+  "dataset": "LEVIR-CD+",
+  "split": "test",
+  "n": 100,
+  "min_size": 64,
+  "shift_sweep": {
+    "0": {
+      "abs_diff": {
+        "precision": 0.074,
+        "recall": 0.4414,
+        "f1": 0.1267,
+        "iou": 0.0676,
+        "accuracy": 0.7594,
+        "pred_change_pct": 23.6,
+        "gt_change_pct": 3.96
+      },
+      "norm_diff": {
+        "precision": 0.08,
+        "recall": 0.409,
+        "f1": 0.1338,
+        "iou": 0.0717,
+        "accuracy": 0.7904,
+        "pred_change_pct": 20.24,
+        "gt_change_pct": 3.96
+      },
+      "cva": {
+        "precision": 0.0818,
+        "recall": 0.3976,
+        "f1": 0.1357,
+        "iou": 0.0728,
+        "accuracy": 0.7996,
+        "pred_change_pct": 19.23,
+        "gt_change_pct": 3.96
+      }
+    },
+    "1": {
+      "abs_diff": {
+        "precision": 0.0746,
+        "recall": 0.4468,
+        "f1": 0.1279,
+        "iou": 0.0683,
+        "accuracy": 0.7589,
+        "pred_change_pct": 23.69,
+        "gt_change_pct": 3.96
+      },
+      "norm_diff": {
+        "precision": 0.081,
+        "recall": 0.4156,
+        "f1": 0.1356,
+        "iou": 0.0727,
+        "accuracy": 0.7904,
+        "pred_change_pct": 20.29,
+        "gt_change_pct": 3.96
+      },
+      "cva": {
+        "precision": 0.0827,
+        "recall": 0.4033,
+        "f1": 0.1373,
+        "iou": 0.0737,
+        "accuracy": 0.7995,
+        "pred_change_pct": 19.29,
+        "gt_change_pct": 3.96
+      }
+    },
+    "2": {
+      "abs_diff": {
+        "precision": 0.0753,
+        "recall": 0.4544,
+        "f1": 0.1292,
+        "iou": 0.0691,
+        "accuracy": 0.7577,
+        "pred_change_pct": 23.86,
+        "gt_change_pct": 3.96
+      },
+      "norm_diff": {
+        "precision": 0.0816,
+        "recall": 0.4215,
+        "f1": 0.1368,
+        "iou": 0.0734,
+        "accuracy": 0.7896,
+        "pred_change_pct": 20.42,
+        "gt_change_pct": 3.96
+      },
+      "cva": {
+        "precision": 0.0834,
+        "recall": 0.4094,
+        "f1": 0.1386,
+        "iou": 0.0745,
+        "accuracy": 0.7987,
+        "pred_change_pct": 19.41,
+        "gt_change_pct": 3.96
+      }
+    },
+    "4": {
+      "abs_diff": {
+        "precision": 0.076,
+        "recall": 0.4639,
+        "f1": 0.1306,
+        "iou": 0.0698,
+        "accuracy": 0.7556,
+        "pred_change_pct": 24.15,
+        "gt_change_pct": 3.96
+      },
+      "norm_diff": {
+        "precision": 0.0809,
+        "recall": 0.429,
+        "f1": 0.1362,
+        "iou": 0.073,
+        "accuracy": 0.7846,
+        "pred_change_pct": 20.97,
+        "gt_change_pct": 3.96
+      },
+      "cva": {
+        "precision": 0.0825,
+        "recall": 0.4163,
+        "f1": 0.1377,
+        "iou": 0.074,
+        "accuracy": 0.7938,
+        "pred_change_pct": 19.96,
+        "gt_change_pct": 3.96
+      }
+    },
+    "8": {
+      "abs_diff": {
+        "precision": 0.0742,
+        "recall": 0.4647,
+        "f1": 0.128,
+        "iou": 0.0684,
+        "accuracy": 0.7495,
+        "pred_change_pct": 24.77,
+        "gt_change_pct": 3.96
+      },
+      "norm_diff": {
+        "precision": 0.0772,
+        "recall": 0.4308,
+        "f1": 0.1309,
+        "iou": 0.07,
+        "accuracy": 0.7737,
+        "pred_change_pct": 22.08,
+        "gt_change_pct": 3.96
+      },
+      "cva": {
+        "precision": 0.0785,
+        "recall": 0.4166,
+        "f1": 0.1321,
+        "iou": 0.0707,
+        "accuracy": 0.7835,
+        "pred_change_pct": 20.99,
+        "gt_change_pct": 3.96
+      }
+    }
+  },
+  "note": "두 번째 영상을 N화소 밀어서 정합 오차가 변화탐지에 주는 영향을 정답 마스크 기준 F1으로 측정. 0.5m 해상도라 1px = 0.5m."
+}

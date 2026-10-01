@@ -1,6 +1,6 @@
 {
   "SIFT+RANSAC": {
-    "rmse_px": 0.7011685967445374,
+    "rmse_px": 0.7011665105819702,
     "rmse_grade": "🟢 통과",
     "inlier_ratio_pct": 35.0,
     "inlier_grade": "🟡 경고",
@@ -17,20 +17,20 @@
     "LoD_note": "이보다 작게 움직인 구간은 '판단 불가'(노란색)로 표시하고 변화로 세지 않음"
   },
   "LoFTR(kornia)": {
-    "rmse_px": 1.495774948080712,
+    "rmse_px": 1.451004010320116,
     "rmse_grade": "🟡 경고",
-    "inlier_ratio_pct": 76.1,
+    "inlier_ratio_pct": 74.1,
     "inlier_grade": "🟢 통과",
     "quadrant_coverage": {
       "TL": 0,
-      "TR": 13,
+      "TR": 15,
       "BL": 9,
-      "BR": 80
+      "BR": 79
     },
     "quadrant_grade": "🔴 실패",
-    "sigma_registration_m": 14.958,
+    "sigma_registration_m": 14.51,
     "sigma_extraction_m_assumed": 10.0,
-    "LoD_m": 35.266,
+    "LoD_m": 34.539,
     "LoD_note": "이보다 작게 움직인 구간은 '판단 불가'(노란색)로 표시하고 변화로 세지 않음"
   }
 }

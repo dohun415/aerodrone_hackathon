@@ -23,7 +23,7 @@ def main():
     src = np.load(interim / "synthetic_src.npy")
     warped = np.load(interim / "synthetic_warped.npy")
     H_true = np.load(interim / "H_true.npy")
-    meta = json.loads((interim / "synthetic_meta.json").read_text())
+    meta = json.loads((interim / "synthetic_meta.json").read_text(encoding="utf-8"))
     gsd = meta["gsd_m"]
 
     h, w = src.shape
@@ -54,7 +54,7 @@ def main():
 
     out = Path("results")
     out.mkdir(exist_ok=True)
-    (out / "synthetic_benchmark.json").write_text(json.dumps(results, ensure_ascii=False, indent=2))
+    (out / "synthetic_benchmark.json").write_text(json.dumps(results, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     print(f"\n저장: results/synthetic_benchmark.json")
 
 

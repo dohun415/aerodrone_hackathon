@@ -1,0 +1,38 @@
+# Windows용 핵심 의존성 (setup_windows.ps1 의 2단계에서 설치).
+#
+# 원본 requirements.txt 와 다른 점 — 아래 4개는 pip 한 줄로 안 되거나
+# 다른 출처가 필요해서 setup_windows.ps1 이 따로 설치한다:
+#
+#   gdal    : PyPI에는 소스 배포만 있어 Windows에서 빌드 실패.
+#             -> cgohlke/geospatial-wheels 의 미리빌드 wheel 사용.
+#   arosics : 위 gdal 이 먼저 깔려야 설치된다. (3단계 -> 4단계 순서)
+#   torch   : PyPI의 Windows 빌드는 CPU 전용.
+#             -> NVIDIA GPU가 있으면 PyTorch CUDA 인덱스에서 설치.
+#   itk-*   : 용량이 커서 마지막에 따로 설치 (5단계).
+#
+# shapely 는 원본이 2.0.7 핀이지만, arosics 가 끌고 오는 geopandas 가
+# 더 높은 버전을 요구해서 2.1.2 로 맞췄다. (pip check 통과 확인함)
+
+numpy==2.0.2
+rasterio==1.4.3
+opencv-python-headless==5.0.0.93
+scikit-image==0.24.0
+matplotlib==3.9.4
+shapely==2.1.2
+pystac==1.10.1
+pystac-client==0.8.3
+planetary-computer==1.0.0
+
+# LoFTR 가중치 다운로드 시 Windows 인증서 저장소 문제를 우회하는 데 필요
+# (pipeline/_compat.py 의 ensure_ssl_certs 참고)
+certifi
+
+# ⑦ 변화탐지 단계 (LEVIR-CD+ 벤치마크 + 사전학습 AdaptFormer)
+#   datasets     : HuggingFace에서 LEVIR-CD+ 내려받기
+#   transformers : AdaptFormer 로드 (trust_remote_code로 저장소 코드 실행)
+#   einops       : AdaptFormer 모델 코드가 요구
+# torchvision 은 torch 와 버전이 맞아야 해서 setup_windows.ps1 에서
+# 같은 CUDA 인덱스로 함께 설치한다 (torch 2.8.0 <-> torchvision 0.23.0).
+datasets
+transformers
+einops

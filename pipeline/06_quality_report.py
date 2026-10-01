@@ -14,6 +14,12 @@ from pathlib import Path
 
 import numpy as np
 
+# 이 스크립트는 판정 결과를 이모지(🟢🟡🔴)로 출력한다. Windows 콘솔의
+# 기본 인코딩(cp949)에는 이 글자가 없어서 그냥 print하면 죽는다.
+from _compat import enable_utf8_stdout
+
+enable_utf8_stdout()
+
 
 def grade(value, good_thresh, warn_thresh, lower_is_better=True):
     if value is None:
@@ -113,4 +119,4 @@ if __name__ == "__main__":
 
     print(json.dumps(reports, ensure_ascii=False, indent=2))
     Path("results").mkdir(exist_ok=True)
-    Path("results/quality_report.json").write_text(json.dumps(reports, ensure_ascii=False, indent=2))
+    Path("results/quality_report.json").write_text(json.dumps(reports, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")

@@ -182,14 +182,15 @@ def main():
     }
 
     Path("results").mkdir(exist_ok=True)
-    Path("results/drone_view_rectify.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
+    Path("results/drone_view_rectify.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
 
     # 그림 저장
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    matplotlib.rcParams["font.family"] = "AppleGothic"
-    matplotlib.rcParams["axes.unicode_minus"] = False
+    # 한글 폰트는 OS마다 다르다(Windows 맑은 고딕 / macOS AppleGothic).
+    from _compat import apply_korean_font
+    apply_korean_font()
 
     fig, axes = plt.subplots(2, 3, figsize=(15, 10))
     axes[0, 0].imshow(sat_img, cmap="gray"); axes[0, 0].set_title("위성 정사영상 (기준)"); axes[0, 0].axis("off")

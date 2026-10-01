@@ -1,0 +1,19 @@
+{
+  "arosics_center_error": "No match found in the given window.",
+  "arosics_on_land": {
+    "method": "AROSICS COREG (Global)",
+    "dx_px": 0.501762330532074,
+    "dy_px": 0.627335250377655,
+    "dx_m": 5.01762330532074,
+    "dy_m": -6.27335250377655,
+    "reliability_pct": 73.98914746644505,
+    "elapsed_s": 0.08301997184753418
+  },
+  "phasecorr": {
+    "method": "phase_cross_correlation",
+    "dy_px": 0.8199999928474426,
+    "dx_px": 0.5799999833106995,
+    "translation_error": 1.0,
+    "elapsed_s": 0.02461862564086914
+  }
+}

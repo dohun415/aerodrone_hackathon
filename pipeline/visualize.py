@@ -12,13 +12,14 @@ import cv2
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
-matplotlib.rcParams["font.family"] = "AppleGothic"
-matplotlib.rcParams["axes.unicode_minus"] = False
+# 한글 폰트는 OS마다 다르다(Windows 맑은 고딕 / macOS AppleGothic).
+from _compat import apply_korean_font
+apply_korean_font()
 import numpy as np
 import rasterio
 
 sys.path.append(str(Path(__file__).resolve().parent))
-from baselines.sift_baseline import register_sift, to_uint8
+from ai_matching.sift_baseline import register_sift, to_uint8
 
 OUT = Path("results/figures")
 OUT.mkdir(parents=True, exist_ok=True)
@@ -54,7 +55,7 @@ def fig_synthetic_before_after():
     interim = Path("data/interim")
     src = np.load(interim / "synthetic_src.npy")
     warped = np.load(interim / "synthetic_warped.npy")
-    meta = json.loads((interim / "synthetic_meta.json").read_text())
+    meta = json.loads((interim / "synthetic_meta.json").read_text(encoding="utf-8"))
 
     src8, warped8 = to_uint8(src), to_uint8(warped)
     before = checkerboard(src8, warped8)
@@ -77,7 +78,7 @@ def fig_synthetic_before_after():
 
 
 def fig_error_bars():
-    results = json.loads(Path("results/synthetic_benchmark.json").read_text())
+    results = json.loads(Path("results/synthetic_benchmark.json").read_text(encoding="utf-8"))
     names = [r["method"] for r in results]
     errs = [r["corner_err_m_mean"] for r in results]
     fig, ax = plt.subplots(figsize=(5, 4))

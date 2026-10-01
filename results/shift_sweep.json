@@ -3,66 +3,66 @@
     "shift_px": 0,
     "naive_false_change_pct": 0.0,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10815
+    "registration_inliers": 10816
   },
   {
     "shift_px": 1,
     "naive_false_change_pct": 3.265,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10697
+    "registration_inliers": 10698
   },
   {
     "shift_px": 2,
     "naive_false_change_pct": 9.411,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10747
+    "registration_inliers": 10748
   },
   {
     "shift_px": 3,
     "naive_false_change_pct": 12.761,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10666
+    "registration_inliers": 10667
   },
   {
     "shift_px": 4,
     "naive_false_change_pct": 15.13,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10749
+    "registration_inliers": 10750
   },
   {
     "shift_px": 5,
     "naive_false_change_pct": 16.942,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10642
+    "registration_inliers": 10643
   },
   {
     "shift_px": 6,
     "naive_false_change_pct": 18.51,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10704
+    "registration_inliers": 10705
   },
   {
     "shift_px": 7,
     "naive_false_change_pct": 19.969,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10631
+    "registration_inliers": 10632
   },
   {
     "shift_px": 8,
     "naive_false_change_pct": 21.21,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10707
+    "registration_inliers": 10708
   },
   {
     "shift_px": 9,
     "naive_false_change_pct": 22.352,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10605
+    "registration_inliers": 10606
   },
   {
     "shift_px": 10,
     "naive_false_change_pct": 23.39,
     "ours_false_change_pct": 0.0,
-    "registration_inliers": 10662
+    "registration_inliers": 10663
   }
 ]

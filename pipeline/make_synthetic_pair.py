@@ -71,7 +71,7 @@ def main():
         "ty_m": round(args.ty * gsd, 2),
         "note": "warped = H_true(src). 정합 기법이 warped->src 변환을 추정하면 H_true의 역행렬과 비교한다.",
     }
-    (out_dir / "synthetic_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2))
+    (out_dir / "synthetic_meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
     print("합성 벤치마크 생성 완료:", meta)
 
 

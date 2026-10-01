@@ -1,0 +1,27 @@
+{
+  "arosics_center": {
+    "method": "AROSICS COREG (Global)",
+    "dx_px": 0.39635616540908813,
+    "dy_px": 0.7406455278396606,
+    "dx_m": 3.9635616540908813,
+    "dy_m": -7.4064552783966064,
+    "reliability_pct": 76.69437482392775,
+    "elapsed_s": 0.32761573791503906
+  },
+  "arosics_on_land": {
+    "method": "AROSICS COREG (Global)",
+    "dx_px": 0.6313874125480652,
+    "dy_px": 0.5752531588077545,
+    "dx_m": 6.313874125480652,
+    "dy_m": -5.752531588077545,
+    "reliability_pct": 83.49020617051549,
+    "elapsed_s": 0.26816630363464355
+  },
+  "phasecorr": {
+    "method": "phase_cross_correlation",
+    "dy_px": 0.8400000333786011,
+    "dx_px": 0.5199999809265137,
+    "translation_error": 1.0,
+    "elapsed_s": 0.15593481063842773
+  }
+}

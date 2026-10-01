@@ -1,0 +1,19 @@
+{
+  "source": "20260817_231616_ssc1_u0002_visual.tif",
+  "item_id": "20260817_231616_ssc1_u0002",
+  "datetime": "2026-08-17T23:16:16Z",
+  "view_angle_deg": 28.9,
+  "ground_control_ratio": 0.17,
+  "native_gsd_m": 0.5,
+  "native_crs": "EPSG:32652",
+  "has_nir": false,
+  "resampled_to": "data/raw/s2_2026-08-12_51SYB_B04.tif",
+  "resampling": "average (0.5m -> 10m, 20x downsample)",
+  "files_10m": {
+    "B04": "data\\raw\\sk_2026-08-17_GYD_B04.tif",
+    "B03": "data\\raw\\sk_2026-08-17_GYD_B03.tif",
+    "B02": "data\\raw\\sk_2026-08-17_GYD_B02.tif"
+  },
+  "files_native": {},
+  "note": "SkySat ortho_visual은 RGB+alpha 4밴드(uint8)로 NIR이 없다 — 전략 문서 제약①이 실물로 확인됨. CRS는 이미 EPSG:32652라 ①단계에서 실제 필요한 작업은 재투영이 아니라 해상도 통일이었다."
+}

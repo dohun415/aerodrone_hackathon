@@ -1,0 +1,7 @@
+{
+  "elapsed_s": 53.87,
+  "residual_std_before": 0.2463,
+  "residual_std_after": 0.2477,
+  "residual_reduction_pct": -0.6,
+  "note": "잔차 표준편차가 줄어들수록 국소 보정이 효과가 있었다는 뜻. 단, 7년 시차의 실제 지표 변화도 잔차에 섞여 있어 이 수치가 곧바로 '정합 오차 감소량'과 같지는 않음 — 참고용 지표."
+}

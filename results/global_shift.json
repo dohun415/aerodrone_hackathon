@@ -3,17 +3,17 @@
   "arosics_on_land": {
     "method": "AROSICS COREG (Global)",
     "dx_px": -0.4431138038635254,
-    "dy_px": 0.8575137257575989,
+    "dy_px": 0.8575138449668884,
     "dx_m": -4.431138038635254,
-    "dy_m": -8.575137257575989,
-    "reliability_pct": 85.15240735092127,
-    "elapsed_s": 0.05013585090637207
+    "dy_m": -8.575138449668884,
+    "reliability_pct": 85.1524068932979,
+    "elapsed_s": 0.1405344009399414
   },
   "phasecorr": {
     "method": "phase_cross_correlation",
     "dy_px": 0.9399999976158142,
     "dx_px": -0.3799999952316284,
     "translation_error": 1.0,
-    "elapsed_s": 0.10058999061584473
+    "elapsed_s": 0.16910123825073242
   }
 }

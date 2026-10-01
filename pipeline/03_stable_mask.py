@@ -90,14 +90,15 @@ if __name__ == "__main__":
     print(json.dumps(result, ensure_ascii=False, indent=2))
 
     Path("results").mkdir(exist_ok=True)
-    Path("results/mask_comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2))
+    Path("results/mask_comparison.json").write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8", newline="\n")
 
     # 저장: 세 장 나란히 (원본 / NDWI 정답 / RGB-only 추정)
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
-    matplotlib.rcParams["font.family"] = "AppleGothic"
-    matplotlib.rcParams["axes.unicode_minus"] = False
+    # 한글 폰트는 OS마다 다르다(Windows 맑은 고딕 / macOS AppleGothic).
+    from _compat import apply_korean_font
+    apply_korean_font()
 
     rgb_disp = np.dstack([to_uint8(red), to_uint8(green), to_uint8(blue)])
     fig, axes = plt.subplots(1, 3, figsize=(14, 5))
