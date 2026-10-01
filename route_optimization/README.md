@@ -2,6 +2,8 @@
 
 > 드론대장 붕붕이 · 2026-10-01~02. 원본은 [jihu0629/Aerodrone-Hackaton 의 `route-optimization` 브랜치](https://github.com/jihu0629/Aerodrone-Hackaton/tree/route-optimization)이고, 이 폴더는 그 중 위성 우선순위·전략 비교 부분만 자체 실행되게 떼어 온 것이다 (수거계획 대시보드는 `../shoresweep_planner/`).
 
+**인천·강화 적용 (조석 모델 집적 예상 지도 + 위성 정합)**: `incheon/README.md` — 집적 예상 해안 140 km(전체 1,108 km 의 13 %)만 날면 전체 지그재그 448 h·1,333소티 → 57 h·178소티. 위성 형상 점수는 하구 수로형 핫스팟과 겹치지 않아(무작위 수준) 인천에서는 조석 모델이 1차 선별, 위성은 해안선 정합·갱신 역할.
+
 **먼저 볼 것**
 - `docs/ROUTE_OPTIMIZATION.md` — 무엇을 했고, 어떤 순서로 생각했고, 숫자가 어떻게 나왔고, 어디까지 믿을 수 있는지 (요약 표는 0절).
 - `docs/route_optimization.html` — 같은 내용을 한 장짜리 인터랙티브로 (브라우저로 열기: 포착률 곡선, 예산·고도별 시간 대비 포착, 니하우 점수 지도, 한계, 판단 규칙).
