@@ -123,7 +123,7 @@ DEM으로 이미 정사보정해서 "위에서 본" 형태(`ortho_visual`)로
 | 언덕 안 인라이어율 (보정 후) | **47%** | **68%** |
 | 언덕 밖 인라이어율 (보정 후) | 95% | 98% |
 
-![드론 시점 보정](results/figures/06_drone_view_rectify.png)
+![드론 시점 보정](../results/figures/06_drone_view_rectify.png)
 
 **의미**: 평지에서는 시점 보정이 확실히 도움된다 — RMSE가 절반
 가까이 줄었다. 그런데 전체 인라이어 비율만 보면 평지든 언덕이든
@@ -239,7 +239,7 @@ IoU로 직접 비교.
 | NDWI (NIR 사용, 정답) | 98.8% | — |
 | RGB-only (회사 데이터와 동일 조건) | 32.8% | **0.33** |
 
-![마스킹 비교](results/figures/04_mask_ndwi_vs_rgb.png)
+![마스킹 비교](../results/figures/04_mask_ndwi_vs_rgb.png)
 
 **의미**: IoU 0.33은 낮다 — 시각적으로도 RGB-only 결과는 섬
 윤곽을 제대로 못 잡고 노이즈가 많다. **전략 문서가 이미 내린 결론
@@ -358,7 +358,7 @@ python pipeline/06_quality_report.py
 
 **결과**:
 
-![어긋남 슬라이더](results/figures/05_shift_sweep.png)
+![어긋남 슬라이더](../results/figures/05_shift_sweep.png)
 
 | 어긋남 | 기존 방식 가짜 변화 | 우리 방식 가짜 변화 |
 |---|---|---|
