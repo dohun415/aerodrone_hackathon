@@ -5,4 +5,24 @@ __pycache__/
 *.ecw
 *.ecw.aux.xml
 results/*.json
-phone_bridge/.venv/
+archive/phone_bridge/.venv/
+archive/volume3d_synthetic/.venv/
+archive/volume3d_synthetic/data/*/colmap/database.db
+ros_sim/out/
+hotspot/data/
+
+# litter/ 파이프라인 산출물·대용량 데이터 (coastal 브랜치 규칙과 동일)
+runs/
+data/litter_*/
+data/company/
+data/aihub/
+data/seg_*/
+data/external/
+results/litter_*/
+tools/
+*.pt
+*.ckpt
+
+# shoresweep_planner 산출물
+shoresweep_planner/outputs/
+archive/volume3d_synthetic/data/
