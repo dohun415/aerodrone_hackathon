@@ -5,3 +5,4 @@ __pycache__/
 *.ecw
 *.ecw.aux.xml
 results/*.json
+phone_bridge/.venv/
