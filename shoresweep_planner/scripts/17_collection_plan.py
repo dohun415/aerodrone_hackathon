@@ -129,6 +129,8 @@ def main() -> None:
     ap.add_argument("--depot-name", default=None)
     ap.add_argument("--workers", type=int, default=2, help="한 팀 인원")
     ap.add_argument("--hours", type=float, default=4.0, help="하루 작업 시간")
+    ap.add_argument("--teams", type=int, default=1, help="동시에 투입하는 팀 수 (순회를 시간 균형으로 나눔)")
+    ap.add_argument("--calib", default=None, help="실측 보정 계수 (예: STY=0.8,ROP=1.5) — 우리 추정 무게에 곱함")
     ap.add_argument("--link", type=float, default=150.0, help="구역 묶기 거리 m (가정값)")
     ap.add_argument("--detour", type=float, default=1.4, help="지형 없을 때 직선 → 실제 거리 배수 (가정값)")
     ap.add_argument("--walk", type=float, default=3.0, help="걷기 속도 km/h (가정값)")
@@ -174,7 +176,8 @@ def main() -> None:
 
     params = CollectParams(link_m=a.link, detour=a.detour, walk_kmh=a.walk, workers=a.workers, hours_per_day=a.hours,
                            round_trip=not a.one_way, weight_source=a.weight, depot_lonlat=depot, depot_name=depot_name,
-                           travel=a.travel, carry=a.carry, objective=a.objective, min_kg=a.min_kg,
+                           travel=a.travel, carry=a.carry, objective=a.objective, min_kg=a.min_kg, teams=a.teams,
+                           calib={k.strip(): float(v) for k, v in (kv.split("=") for kv in a.calib.split(","))} if a.calib else None,
                            include_codes=[c.strip() for c in a.codes.split(",")] if a.codes else None, bag=PlanParams())
 
     center = None; terrain = None
@@ -193,7 +196,7 @@ def main() -> None:
     t = plan.totals
     print(f"    구역 {t['zones']}곳 · 예상 {t['kg_plan']:.1f} kg (범위 {t['kg_min']:.1f}–{t['kg_max']:.1f}; 기업값 합 {t['company_kg']:.3f}) · "
           f"마대 {t['bags']}장 · 이동 {plan.route_len_m / 1000:.1f} km ({'지형' if terrain else '직선×우회'}, {a.travel}/{a.carry}) · "
-          f"총 {plan.total_min / 60:.1f}시간 ({a.workers}명) → {len(plan.days)}일" + (f" · 제외 {plan.n_skipped}개" if plan.n_skipped else ""))
+          f"총 {plan.total_min / 60:.1f}시간 ({len(plan.teams)}팀 × {a.workers}명) → 최대 {max((t['days'] for t in plan.teams), default=0)}일" + (f" · 제외 {plan.n_skipped}개" if plan.n_skipped else ""))
 
     print(f"[4] 저장: {out}")
     save_plan_files(plan, out)
@@ -208,7 +211,7 @@ def main() -> None:
     for z in plan.zones:
         comp = ", ".join(f"{k} {v}" for k, v in z.by_code.items())
         flag = " ⚠2인" if z.heavy_ids else ""
-        print(f"    {z.day}일차 {z.step:>2}. {z.name:<10} {z.n:>2}개 ({comp}) {z.kg_plan:6.1f} kg 마대 {z.bags:>2} 접근 {z.dist_from_prev_m:5.0f} m "
+        print(f"    {'ABCDEF'[z.team - 1] + '팀 ' if len(plan.teams) > 1 else ''}{z.day}일차 {z.step:>2}. {z.name:<10} {z.n:>2}개 ({comp}) {z.kg_plan:6.1f} kg 마대 {z.bags:>2} 접근 {z.dist_from_prev_m:5.0f} m "
               f"이동 {z.walk_min:3.0f}분 작업 {z.work_min:3.0f}분{flag}" + (f" 복귀 {z.returns}회" if z.returns else ""))
     print("\n결과:")
     for name in ["수거계획.html", "수거계획_지도.png", "수거계획.xlsx", "zones.csv", "objects.csv", "plan.json", "summary.md"]:

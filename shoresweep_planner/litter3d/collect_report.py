@@ -303,6 +303,14 @@ details summary{cursor:pointer;font-weight:700;font-size:16px;padding:6px 0}
 .dp{font-size:30px;filter:drop-shadow(0 1px 2px #000a);cursor:grab;line-height:1}
 .foot{color:var(--muted);font-size:13px;margin:20px 0}
 .busy{position:absolute;inset:0;background:#0006;color:#fff;display:none;align-items:center;justify-content:center;font-size:18px;font-weight:700;z-index:800;border-radius:12px}
+.team{display:flex;align-items:center;gap:10px;margin:22px 0 4px;padding-top:12px;border-top:2px solid var(--border)}.team h3{margin:0;font-size:16px;color:var(--ink2);font-weight:600}
+.team .pill{font-size:14px;padding:4px 12px;border-radius:999px;color:#fff;font-weight:800}
+.donebtn{font:inherit;font-size:13px;padding:5px 10px;border-radius:999px;border:1px solid var(--ok);background:transparent;color:var(--ok);cursor:pointer;flex:none}.donebtn:hover{background:var(--ok);color:#fff}
+.links{font-size:13px;margin-top:8px;color:var(--ink2)}.links a{color:var(--accent);text-decoration:none}.links a:hover{text-decoration:underline}
+.bar{height:14px;background:var(--bg);border-radius:999px;overflow:hidden;border:1px solid var(--border)}.bar div{height:100%;background:var(--ok);transition:width .3s}
+.cal{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px 14px;align-items:end}.cal label{display:flex;flex-direction:column;font-size:13px;color:var(--ink2);gap:3px}.cal label b{color:var(--ink);font-size:14px}
+.cal input,.cal select{font:inherit;font-size:16px;padding:6px 8px;border:1px solid var(--border);border-radius:9px;background:var(--bg);color:var(--ink);width:100%}
+#cal-msg{font-size:14px;color:var(--ok);margin-top:8px;font-weight:600}
 @media (max-width:600px){header h1{font-size:22px}.tile .val{font-size:24px}#map{height:420px}.facts{grid-template-columns:repeat(2,1fr)}.panel{position:static}}
 @media print{body{background:#fff;font-size:12px}.card,.tile,.step{break-inside:avoid;box-shadow:none}.mapbtns,.panel,.btns{display:none}#map{height:auto}#map .leaflet-container{display:none}#map img.fallback{display:block!important}
 details>summary{display:none}details:not([open])>*{display:block}.steps{grid-template-columns:repeat(2,1fr)}}
@@ -315,14 +323,23 @@ const D = window.PLAN;
 const $ = (s)=>document.querySelector(s);
 const esc = (s)=>String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const DAYC = D.day_colors;
+const TEAMC = ["#2a78d6","#eb6834","#1baf7a","#8e44ad","#eda100","#e34948"];
+const TEAMN = ["A","B","C","D","E","F"];
 const COMPASS = ["북","북동","동","남동","남","남서","서","북서"];
 const CIRC = "①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳";
 const NIOSH = 23;
 
-// ───────── 좌표: 위경도 ↔ 투영 m (아핀 근사, 수 km 안에서 오차 < 1 m) ─────────
+// ───────── 저장 (이 브라우저에만): 완료 체크, 실측 보정 계수 ─────────
+const LS_KEY = 'shoresweep:' + (D.site || 'site');
+let ST = {done: new Set(), calib: {}};
+try { const o = JSON.parse(localStorage.getItem(LS_KEY) || '{}'); ST.done = new Set(o.done || []); ST.calib = o.calib || {}; } catch (e) {}
+const persist = ()=>{ try { localStorage.setItem(LS_KEY, JSON.stringify({done:[...ST.done], calib:ST.calib})); } catch (e) {} };
+
+// ───────── 좌표: 위경도 ↔ 투영 m (아핀 근사) ─────────
 const AF = D.affine.fwd, AI = D.affine.inv;
 const ll2xy = (lon,lat)=>[AF[0]*lon+AF[1]*lat+AF[2], AF[3]*lon+AF[4]*lat+AF[5]];
 const xy2ll = (x,y)=>{ const u=x-AF[2], v=y-AF[5]; return [AI[0]*u+AI[1]*v, AI[2]*u+AI[3]*v]; };
+const toLL=(p)=>{ const ll=xy2ll(p[0],p[1]); return [ll[1],ll[0]]; };
 
 // ───────── 지형 격자 + 다익스트라 ─────────
 const T = D.terrain;
@@ -358,16 +375,22 @@ let P = JSON.parse(JSON.stringify(DEF));
 let depot = {lon:D.depot.lon, lat:D.depot.lat, name:D.depot.name};
 const defaultDepot = {lon:D.depot.lon, lat:D.depot.lat, name:D.depot.name};
 function readControls(){
-  const num=(id,dflt)=>{ const v=parseFloat($('#'+id).value); return isFinite(v)?v:dflt; };
-  P.workers=Math.max(1,Math.round(num('c-workers',2))); P.hours_per_day=Math.max(0.5,num('c-hours',4)); P.link_m=num('c-link',150); P.walk_kmh=Math.max(0.5,num('c-walk',3));
+  const num=(id,dflt)=>{ const el=$('#'+id); if(!el) return dflt; const v=parseFloat(el.value); return isFinite(v)?v:dflt; };
+  P.workers=Math.max(1,Math.round(num('c-workers',2))); P.hours_per_day=Math.max(0.5,num('c-hours',4)); P.teams=Math.max(1,Math.round(num('c-teams',1)));
+  P.link_m=num('c-link',150); P.walk_kmh=Math.max(0.5,num('c-walk',3));
   P.item_min=num('c-item',2); P.min_per_m2=num('c-m2',1.5); P.carry_kg_per_person=Math.max(1,num('c-ckg',15)); P.carry_bags_per_person=Math.max(1,Math.round(num('c-cbags',3)));
   P.min_kg=num('c-minkg',0); P.bag_kg=Math.max(1,num('c-bagkg',15)); P.bag_l=Math.max(5,num('c-bagl',80)); P.detour=num('c-detour',1.4); P.veg_cost=Math.max(1,num('c-veg',3)); P.boat_cost=Math.max(0.05,num('c-boat',0.5));
   P.round_trip=$('#c-round').checked;
   P.include_codes=[...document.querySelectorAll('.codes input:checked')].map(e=>e.value);
+  P.exclude_done=$('#c-exdone') ? $('#c-exdone').checked : true;
+  for (const c of Object.keys(D.mats)) { const el=$('#c-cal-'+c); if (el) { const v=parseFloat(el.value); ST.calib[c] = isFinite(v)&&v>0 ? v : 1; } }
+  persist();
   if (T){ T.cost.walk['2']=P.veg_cost; T.cost.boat['2']=P.veg_cost; T.cost.boat['1']=P.boat_cost; }
 }
 function segVal(name){ const b=document.querySelector(`.seg[data-name="${name}"] button.on`); return b?b.dataset.v:null; }
 function setSeg(name,v){ document.querySelectorAll(`.seg[data-name="${name}"] button`).forEach(b=>b.classList.toggle('on', b.dataset.v===v)); }
+function opts(over){ return Object.assign({travel:segVal('travel'), carry:segVal('carry'), objective:segVal('objective'), wsrc:segVal('wsrc'), wstat:segVal('wstat'),
+  workers:P.workers, hours:P.hours_per_day, teams:P.teams, scale:1, exclude_done:P.exclude_done}, over||{}); }
 
 // ───────── 모델 (collect.py 와 같은 규칙) ─────────
 function bagsOf(kg, m3){ const byW=kg/P.bag_kg, byV=m3*D.bag.bulk/(P.bag_l/1000); if (byV>=byW) return [Math.max(Math.ceil(byV), (m3>0||kg>0)?1:0),'volume']; return [Math.max(Math.ceil(byW),1),'weight']; }
@@ -383,16 +406,17 @@ function tourOrder(Dm, start, nodes, roundTrip){
     for(let i=0;i<n;i++) for(let j=0;j<n;j++){ if(i===j)continue; const cand=order.slice(); const v=cand.splice(i,1)[0]; cand.splice(j,0,v); const l=L(cand); if(l<best-1e-9){order=cand;best=l;improved=true;} } }
   return order;
 }
-function computePlan(){
+function computePlan(o){
   const t0=performance.now();
-  const stat=segVal('wstat'), src=segVal('wsrc'), travel=segVal('travel'), carry=segVal('carry'), objective=segVal('objective');
-  const mode = (T && travel==='boat') ? 'boat' : 'walk';
-  const objs = D.objects.map(o=>{ const kg = (src==='company' && o.ckg!=null) ? o.ckg : (stat==='min'?o.kmin: stat==='max'?o.kmax:o.ktyp);
-    const heavy = kg>NIOSH || (o.area>=3 && o.kmax>NIOSH); const inc = P.include_codes.includes(o.code) && kg>=P.min_kg;
-    return Object.assign({}, o, {kg, heavy, inc, zone:-1, order:0}); });
-  const inc = objs.filter(o=>o.inc); const n=inc.length;
+  const mode = (T && o.travel==='boat') ? 'boat' : 'walk';
+  const objs = D.objects.map(ob=>{ const cal = (o.wsrc==='company') ? 1 : (ST.calib[ob.code]||1);
+    const kg = ((o.wsrc==='company' && ob.ckg!=null) ? ob.ckg : (o.wstat==='min'?ob.kmin: o.wstat==='max'?ob.kmax:ob.ktyp)*cal) * o.scale;
+    const heavy = kg>NIOSH || (ob.area>=3 && ob.kmax>NIOSH); const done = ST.done.has(ob.id);
+    const inc = P.include_codes.includes(ob.code) && kg>=P.min_kg && !(o.exclude_done && done);
+    return Object.assign({}, ob, {kg, heavy, inc, done, zone:-1, order:0}); });
+  const inc = objs.filter(ob=>ob.inc); const n=inc.length;
   const dxy = ll2xy(depot.lon, depot.lat);
-  const nodes = [{x:dxy[0],y:dxy[1]}].concat(inc.map(o=>({x:o.x,y:o.y})));
+  const nodes = [{x:dxy[0],y:dxy[1]}].concat(inc.map(ob=>({x:ob.x,y:ob.y})));
   let Dm, cells=null, unreachable=0;
   if (T && n){ nodes.forEach(nd=>forcePassable([nd.x,nd.y])); cells = nodes.map(nd=>cellOf(nd.x,nd.y));
     Dm = nodes.map((a,i)=>{ const {dist}=dijkstra(mode, cells[i]); return cells.map((c,j)=> i===j?0:dist[c]); });
@@ -401,63 +425,82 @@ function computePlan(){
   const seg = (i,j)=>{ if (T && cells){ const pc = pathCells(mode, cells[i], cells[j]); if (pc){ const pts=pc.map(xyOfCell); return [[nodes[i].x,nodes[i].y]].concat(pts.slice(1,-1), [[nodes[j].x,nodes[j].y]]); } } return [[nodes[i].x,nodes[i].y],[nodes[j].x,nodes[j].y]]; };
   const parent = Array.from({length:n},(_,i)=>i); const find=(i)=>{ while(parent[i]!==i){ parent[i]=parent[parent[i]]; i=parent[i]; } return i; };
   for(let i=0;i<n;i++) for(let j=i+1;j<n;j++) if(Dm[i+1][j+1]<=P.link_m){ const a=find(i),b=find(j); if(a!==b) parent[a]=b; }
-  const remap={}; const groups={}; inc.forEach((o,i)=>{ const r=find(i); if(!(r in remap)) remap[r]=Object.keys(remap).length; o.zone=remap[r]; (groups[o.zone]=groups[o.zone]||[]).push(i+1); });
+  const remap={}; const groups={}; inc.forEach((ob,i)=>{ const r=find(i); if(!(r in remap)) remap[r]=Object.keys(remap).length; ob.zone=remap[r]; (groups[ob.zone]=groups[ob.zone]||[]).push(i+1); });
   const zoneIds = Object.keys(groups).map(Number).sort((a,b)=>a-b); const Z=zoneIds.length;
-  const zkg={}, zwork={}; for(const z of zoneIds){ zkg[z]=groups[z].reduce((s,i)=>s+inc[i-1].kg,0); zwork[z]=groups[z].reduce((s,i)=>s+P.item_min+P.min_per_m2*inc[i-1].area,0)/P.workers + DEF.heavy_extra_min*groups[z].filter(i=>inc[i-1].heavy).length; }
+  const zkg={}, zwork={}; for(const z of zoneIds){ zkg[z]=groups[z].reduce((s,i)=>s+inc[i-1].kg,0); zwork[z]=groups[z].reduce((s,i)=>s+P.item_min+P.min_per_m2*inc[i-1].area,0)/o.workers + DEF.heavy_extra_min*groups[z].filter(i=>inc[i-1].heavy).length; }
   const ZD = Array.from({length:Z+1},()=>new Array(Z+1).fill(0));
   zoneIds.forEach((za,ai)=>{ const a=ai+1; ZD[0][a]=ZD[a][0]=Math.min(...groups[za].map(i=>Dm[0][i])); zoneIds.forEach((zb,bi)=>{ const b=bi+1; if(a!==b){ let m=Infinity; for(const i of groups[za]) for(const j of groups[zb]) if(Dm[i][j]<m)m=Dm[i][j]; ZD[a][b]=m; } }); });
   const wmpm = 60/(P.walk_kmh*1000);
   let order;
-  if (objective==='weight' && Z){ let rem=zoneIds.map((_,i)=>i+1), pos=0; order=[]; while(rem.length){ let best=null,bv=-1; for(const a of rem){ const z=zoneIds[a-1]; const v=zkg[z]/Math.max(ZD[pos][a]*wmpm+zwork[z],1e-6); if(v>bv){bv=v;best=a;} } order.push(best); rem=rem.filter(x=>x!==best); pos=best; } }
+  if (o.objective==='weight' && Z){ let rem=zoneIds.map((_,i)=>i+1), pos=0; order=[]; while(rem.length){ let best=null,bv=-1; for(const a of rem){ const z=zoneIds[a-1]; const v=zkg[z]/Math.max(ZD[pos][a]*wmpm+zwork[z],1e-6); if(v>bv){bv=v;best=a;} } order.push(best); rem=rem.filter(x=>x!==best); pos=best; } }
   else order = tourOrder(ZD, 0, zoneIds.map((_,i)=>i+1), P.round_trip);
   const ordered = order.map(a=>zoneIds[a-1]);
-  const cents={}; for(const z of zoneIds){ const L=groups[z].map(i=>inc[i-1]); cents[z]=[L.reduce((s,o)=>s+o.x,0)/L.length, L.reduce((s,o)=>s+o.y,0)/L.length]; }
+  const cents={}; for(const z of zoneIds){ const L=groups[z].map(i=>inc[i-1]); cents[z]=[L.reduce((s,ob)=>s+ob.x,0)/L.length, L.reduce((s,ob)=>s+ob.y,0)/L.length]; }
   const dirCount={}, seen={}, names={}; for(const z of ordered){ const d=compassName(cents[z][0]-D.center.x, cents[z][1]-D.center.y); dirCount[d]=(dirCount[d]||0)+1; }
   for(const z of ordered){ const d=compassName(cents[z][0]-D.center.x, cents[z][1]-D.center.y); seen[d]=(seen[d]||0)+1; names[z]=d+'쪽 해안'+(dirCount[d]>1&&seen[d]<=CIRC.length?' '+CIRC[seen[d]-1]:''); }
-  const capKg=P.workers*P.carry_kg_per_person, capBags=P.workers*P.carry_bags_per_person;
-  const zones=[]; let pos=0, cumMin=0, cumBags=0, routeLen=0, loadKg=0, loadBags=0;
-  const speedF=()=>1-Math.min(0.4, DEF.load_slow*loadKg/P.workers);
-  ordered.forEach((z,si)=>{ const step=si+1; let members=groups[z].slice(); const inner=[]; let cur=pos;
-    while(members.length){ let best=null,bd=Infinity; for(const i of members){ if(Dm[cur][i]<bd){bd=Dm[cur][i];best=i;} } inner.push(best); members=members.filter(x=>x!==best); cur=best; }
-    inner.forEach((i,k)=>{ inc[i-1].order=k+1; });
-    const dIn=Dm[pos][inner[0]]; const segs=[]; let walkMin=0, distTot=0, returns=0; cur=pos; let approach=null;
-    for(const i of inner){ const o=inc[i-1]; const ob=bagsOf(o.kg,o.vol)[0];
-      if (carry==='carry' && (loadKg>0||loadBags>0) && (loadKg+o.kg>capKg || loadBags+ob>capBags)){ const back=Dm[cur][0], out=Dm[0][i]; walkMin+=back*wmpm/speedF(); loadKg=0; loadBags=0; walkMin+=out*wmpm/speedF(); distTot+=back+out; segs.push(seg(cur,0)); segs.push(seg(0,i)); returns++; }
-      else { const d=Dm[cur][i]; walkMin+=d*wmpm/speedF(); distTot+=d; segs.push(seg(cur,i)); }
-      if (approach===null) approach = segs.length===1 ? segs[0] : segs[0].concat(segs[1].slice(1));
-      if (carry==='carry'){ loadKg+=o.kg; loadBags+=ob; } cur=i; }
-    pos=cur; const L=inner.map(i=>inc[i-1]); const kg=L.reduce((s,o)=>s+o.kg,0), m3=L.reduce((s,o)=>s+o.vol,0); const [bags]=bagsOf(kg,m3);
-    const heavy=L.filter(o=>o.heavy); const workMin=zwork[z]; cumMin+=walkMin+workMin; cumBags+=bags; routeLen+=distTot;
-    const byCode={}; for(const o of L) byCode[o.code]=(byCode[o.code]||0)+1;
-    const tools=[...new Set(Object.keys(byCode).map(c=>D.mats[c]&&D.mats[c].tool).filter(Boolean))].sort();
-    const notes=[]; if(heavy.length) notes.push(`무거운 물체 ${heavy.length}개 → 2인 이상 또는 장비 (NIOSH 23 kg 초과 가능)`);
-    const big=L.filter(o=>o.area>=3); if(big.length) notes.push(`면적 3 m² 이상 큰 물체 ${big.length}개 (${big.map(o=>`${o.ko} ${o.area.toFixed(1)} m²`).join(', ')})`);
-    if(returns) notes.push(`적재량 초과로 출발지 복귀 ${returns}회 포함`);
-    const path=[]; segs.forEach((s,si2)=>{ s.forEach((q,k)=>{ if(!(si2>0&&k===0)) path.push(q); }); });
-    const cll = xy2ll(cents[z][0],cents[z][1]);
-    zones.push({zone:z, step, name:names[z], cx:cents[z][0], cy:cents[z][1], lon:cll[0], lat:cll[1], objects:L, n:L.length, byCode, kg, kmin:L.reduce((s,o)=>s+o.kmin,0), kmax:L.reduce((s,o)=>s+o.kmax,0), ckg:L.reduce((s,o)=>s+(o.ckg||0),0), m3, bags, heavy, tools, notes, path, approach:approach||[], dIn, distTot, walkMin, workMin, cumMin, cumBags, returns, day:1}); });
-  let backM=0, backMin=0, backPath=[]; if (P.round_trip && zones.length){ backM=Dm[pos][0]; backMin=backM*wmpm/speedF(); routeLen+=backM; backPath=seg(pos,0); }
-  const totalWalk=zones.reduce((s,z)=>s+z.walkMin,0)+backMin, totalWork=zones.reduce((s,z)=>s+z.workMin,0), totalMin=totalWalk+totalWork;
-  const dayCap=P.hours_per_day*60; let day=1, acc=0; const days=[];
-  for(const z of zones){ if(acc>0 && acc+z.walkMin+z.workMin>dayCap){ days.push({day, steps:zones.filter(q=>q.day===day).map(q=>q.step), minutes:acc}); day++; acc=0; } z.day=day; acc+=z.walkMin+z.workMin; }
-  if(zones.length) days.push({day, steps:zones.filter(q=>q.day===day).map(q=>q.step), minutes:acc+backMin});
-  const kgPlan=inc.reduce((s,o)=>s+o.kg,0), vol=inc.reduce((s,o)=>s+o.vol,0);
-  const totals={kg:kgPlan, kmin:inc.reduce((s,o)=>s+o.kmin,0), kmax:inc.reduce((s,o)=>s+o.kmax,0), ckg:inc.reduce((s,o)=>s+(o.ckg||0),0), vol, bags:zones.reduce((s,z)=>s+z.bags,0), heavy:zones.reduce((s,z)=>s+z.heavy.length,0), zones:zones.length, returns:zones.reduce((s,z)=>s+z.returns,0), tonbags: inc.length?Math.ceil(Math.max(kgPlan/D.bag.tonbag_kg, vol*D.bag.bulk/D.bag.tonbag_m3)):0};
-  const byCode={}; for(const o of inc){ const d=byCode[o.code]=byCode[o.code]||{ko:o.ko,color:o.color,count:0,area:0,kg:0,kmin:0,kmax:0,ckg:0,vol:0}; d.count++; d.area+=o.area; d.kg+=o.kg; d.kmin+=o.kmin; d.kmax+=o.kmax; d.ckg+=o.ckg||0; d.vol+=o.vol; }
-  const equipment=[`마대 ${Math.ceil(totals.bags*1.2)}장 (계산 ${totals.bags}장 + 여유 20 %)`, '장갑·집게 인원수만큼'];
+  const capKg=o.workers*P.carry_kg_per_person, capBags=o.workers*P.carry_bags_per_person;
+  // 한 팀이 seq 순서로 도는 함수
+  function traverse(seq, startStep, team){
+    const zones=[]; let pos=0, cumMin=0, cumBags=0, loadKg=0, loadBags=0;
+    const speedF=()=>1-Math.min(0.4, DEF.load_slow*loadKg/o.workers);
+    seq.forEach((z,si)=>{ const step=startStep+si; let members=groups[z].slice(); const inner=[]; let cur=pos;
+      while(members.length){ let best=null,bd=Infinity; for(const i of members){ if(Dm[cur][i]<bd){bd=Dm[cur][i];best=i;} } inner.push(best); members=members.filter(x=>x!==best); cur=best; }
+      inner.forEach((i,k)=>{ inc[i-1].order=k+1; });
+      const dIn=Dm[pos][inner[0]]; const segs=[]; let walkMin=0, distTot=0, returns=0; cur=pos; let approach=null;
+      for(const i of inner){ const ob=inc[i-1]; const b=bagsOf(ob.kg,ob.vol)[0];
+        if (o.carry==='carry' && (loadKg>0||loadBags>0) && (loadKg+ob.kg>capKg || loadBags+b>capBags)){ const back=Dm[cur][0], out=Dm[0][i]; walkMin+=back*wmpm/speedF(); loadKg=0; loadBags=0; walkMin+=out*wmpm/speedF(); distTot+=back+out; segs.push(seg(cur,0)); segs.push(seg(0,i)); returns++; }
+        else { const d=Dm[cur][i]; walkMin+=d*wmpm/speedF(); distTot+=d; segs.push(seg(cur,i)); }
+        if (approach===null) approach = segs.length===1 ? segs[0] : segs[0].concat(segs[1].slice(1));
+        if (o.carry==='carry'){ loadKg+=ob.kg; loadBags+=b; } cur=i; }
+      pos=cur; const L=inner.map(i=>inc[i-1]); const kg=L.reduce((s,ob)=>s+ob.kg,0), m3=L.reduce((s,ob)=>s+ob.vol,0); const [bags]=bagsOf(kg,m3);
+      const heavy=L.filter(ob=>ob.heavy); const workMin=zwork[z]; cumMin+=walkMin+workMin; cumBags+=bags;
+      const byCode={}; for(const ob of L) byCode[ob.code]=(byCode[ob.code]||0)+1;
+      const tools=[...new Set(Object.keys(byCode).map(c=>D.mats[c]&&D.mats[c].tool).filter(Boolean))].sort();
+      const notes=[]; if(heavy.length) notes.push(`무거운 물체 ${heavy.length}개 → 2인 이상 또는 장비 (NIOSH 23 kg 초과 가능)`);
+      const big=L.filter(ob=>ob.area>=3); if(big.length) notes.push(`면적 3 m² 이상 큰 물체 ${big.length}개 (${big.map(ob=>`${ob.ko} ${ob.area.toFixed(1)} m²`).join(', ')})`);
+      if(returns) notes.push(`적재량 초과로 출발지 복귀 ${returns}회 포함`);
+      const path=[]; segs.forEach((sg,si2)=>{ sg.forEach((q,k)=>{ if(!(si2>0&&k===0)) path.push(q); }); });
+      const cll = xy2ll(cents[z][0],cents[z][1]);
+      zones.push({zone:z, step, team, name:names[z], cx:cents[z][0], cy:cents[z][1], lon:cll[0], lat:cll[1], objects:L, n:L.length, byCode, kg, kmin:L.reduce((s,ob)=>s+ob.kmin,0), kmax:L.reduce((s,ob)=>s+ob.kmax,0), ckg:L.reduce((s,ob)=>s+(ob.ckg||0),0), m3, bags, heavy, tools, notes, path, approach:approach||[], dIn, distTot, walkMin, workMin, cumMin, cumBags, returns, day:1, firstCell: cells?cells[inner[0]]:null}); });
+    let backM=0, backMin=0, backPath=[]; if (P.round_trip && zones.length){ backM=Dm[pos][0]; backMin=backM*wmpm/speedF(); backPath=seg(pos,0); }
+    return {zones, backM, backMin, backPath};
+  }
+  // 팀 분할: 한 팀 순회를 시간 균형(전체 누적 기준)으로 연속 구간으로
+  const nTeams=Math.max(1,o.teams); let segments;
+  if (nTeams>1 && ordered.length>1){ const single=traverse(ordered,1,1); const tot=single.zones.reduce((s,z)=>s+z.walkMin+z.workMin,0); segments=[]; let cur=[], cum=0;
+    single.zones.forEach((z,k)=>{ cur.push(ordered[k]); cum+=z.walkMin+z.workMin; const remaining=single.zones.length-k-1; const teamsLeft=nTeams-segments.length-1; if(segments.length<nTeams-1 && remaining>=teamsLeft && (cum>=(segments.length+1)*tot/nTeams || remaining===teamsLeft)){ segments.push(cur); cur=[]; } });
+    if(cur.length) segments.push(cur); }
+  else segments = ordered.length ? [ordered] : [];
+  const zones=[], teams=[], days=[]; let routeLen=0, totalWalk=0, totalWork=0, step0=1; const dayCap=o.hours*60;
+  segments.forEach((seq,ti)=>{ const t=ti+1; const r=traverse(seq, step0, t); step0+=r.zones.length;
+    const walk=r.zones.reduce((s,z)=>s+z.walkMin,0)+r.backMin, work=r.zones.reduce((s,z)=>s+z.workMin,0); routeLen+=r.zones.reduce((s,z)=>s+z.distTot,0)+r.backM; totalWalk+=walk; totalWork+=work;
+    let day=1, acc=0; for(const z of r.zones){ if(acc>0 && acc+z.walkMin+z.workMin>dayCap){ days.push({team:t, day, steps:r.zones.filter(q=>q.day===day).map(q=>q.step), minutes:acc}); day++; acc=0; } z.day=day; acc+=z.walkMin+z.workMin; }
+    if(r.zones.length) days.push({team:t, day, steps:r.zones.filter(q=>q.day===day).map(q=>q.step), minutes:acc+r.backMin});
+    teams.push({team:t, zones:r.zones.map(z=>z.step), n:r.zones.reduce((s,z)=>s+z.n,0), kg:r.zones.reduce((s,z)=>s+z.kg,0), bags:r.zones.reduce((s,z)=>s+z.bags,0), walkMin:walk, workMin:work, minutes:walk+work, days:r.zones.length?day:0, backPath:r.backPath, routeM:r.zones.reduce((s,z)=>s+z.distTot,0)+r.backM});
+    zones.push(...r.zones); });
+  const totalMin = teams.length ? Math.max(...teams.map(t=>t.minutes)) : 0;
+  const kgPlan=inc.reduce((s,ob)=>s+ob.kg,0), vol=inc.reduce((s,ob)=>s+ob.vol,0);
+  const doneObjs=objs.filter(ob=>ob.done); const allSel=objs.filter(ob=>P.include_codes.includes(ob.code) && ob.kg>=P.min_kg);
+  const totals={kg:kgPlan, kmin:inc.reduce((s,ob)=>s+ob.kmin,0), kmax:inc.reduce((s,ob)=>s+ob.kmax,0), ckg:inc.reduce((s,ob)=>s+(ob.ckg||0),0), vol, bags:zones.reduce((s,z)=>s+z.bags,0), heavy:zones.reduce((s,z)=>s+z.heavy.length,0), zones:zones.length, returns:zones.reduce((s,z)=>s+z.returns,0), tonbags: inc.length?Math.ceil(Math.max(kgPlan/D.bag.tonbag_kg, vol*D.bag.bulk/D.bag.tonbag_m3)):0,
+    done:doneObjs.length, doneKg:doneObjs.reduce((s,ob)=>s+ob.kg,0), all:allSel.length, allKg:allSel.reduce((s,ob)=>s+ob.kg,0)};
+  const byCode={}; for(const ob of inc){ const d=byCode[ob.code]=byCode[ob.code]||{ko:ob.ko,color:ob.color,count:0,area:0,kg:0,kmin:0,kmax:0,ckg:0,vol:0}; d.count++; d.area+=ob.area; d.kg+=ob.kg; d.kmin+=ob.kmin; d.kmax+=ob.kmax; d.ckg+=ob.ckg||0; d.vol+=ob.vol; }
+  const equipment=[`마대 ${Math.ceil(totals.bags*1.2)}장 (계산 ${totals.bags}장 + 여유 20 %)`, `장갑·집게 ${o.workers*nTeams}명분`];
   const tools=[...new Set(zones.flatMap(z=>z.tools))].sort(); if(tools.length) equipment.push(tools.join(' / ')+' (로프·그물 자르기)');
   if (totals.tonbags>=1 && vol*D.bag.bulk>0.5) equipment.push(`톤백 ${totals.tonbags}개 또는 집결지 적재 공간 ${(vol*D.bag.bulk).toFixed(1)} m³`);
   if (totals.heavy) equipment.push(`무거운 물체 ${totals.heavy}개 → 2인 운반 또는 손수레`);
   if (mode==='boat') equipment.push('보트·구명조끼, 승·하선 지점 사전 확인');
+  if (nTeams>1) equipment.push(`팀 ${nTeams}개 → 팀별 무전기·연락 수단, 집결 시각 약속`);
   equipment.push('식수·구급약, 물때표 확인 (갯바위 구간)');
-  return {objs, inc, zones, days, totals, byCode, equipment, routeLen, totalWalk, totalWork, totalMin, backPath, mode, carry, objective, unreachable, ms:performance.now()-t0, skipped:objs.length-inc.length};
+  return {o, objs, inc, zones, teams, days, totals, byCode, equipment, routeLen, totalWalk, totalWork, totalMin, mode, unreachable, ms:performance.now()-t0, skipped:allSel.length-inc.length, nTeams};
 }
 
 // ───────── 표시 ─────────
 const fmtKg=(kg)=>kg>=100?kg.toLocaleString('ko',{maximumFractionDigits:0}):kg>=1?kg.toFixed(1):kg.toFixed(2);
 const fmtMin=(m)=>m>=60?`${Math.floor(m/60)}시간 ${Math.round(m%60)}분`:`${Math.round(m)}분`;
-const toLL=(p)=>{ const ll=xy2ll(p[0],p[1]); return [ll[1],ll[0]]; };
-let map=null, layers=null, zoneMarkers={}, depotMarker=null, allBounds=null, fitted=false;
+const colorOf=(z,R)=> (R.nTeams>1 ? TEAMC[(z.team-1)%TEAMC.length] : DAYC[(z.day-1)%DAYC.length]);
+const teamName=(t)=>TEAMN[t-1]||String(t);
+const navLinks=(name,lat,lon)=>`<a href="https://map.kakao.com/link/to/${encodeURIComponent(name)},${lat.toFixed(6)},${lon.toFixed(6)}" target="_blank" rel="noopener">카카오맵 길찾기</a> · <a href="https://www.google.com/maps/dir/?api=1&destination=${lat.toFixed(6)},${lon.toFixed(6)}&travelmode=walking" target="_blank" rel="noopener">구글 지도</a>`;
+let map=null, layers=null, zoneMarkers={}, depotMarker=null, meMarker=null, allBounds=null, fitted=false;
 function initMap(){
   const fb=$('#fallback');
   if (typeof L==='undefined'){ fb.style.display='block'; $('#maphint').textContent='인터넷 연결이 없어 인쇄용 지도(기본 설정)를 보여줍니다. 숫자·카드는 아래에서 계속 다시 계산됩니다.'; return; }
@@ -478,7 +521,7 @@ function initMap(){
   depotMarker=L.marker([depot.lat,depot.lon],{icon:L.divIcon({className:'',html:'<div class="dp" title="끌어서 출발지 변경">★</div>',iconSize:[30,30],iconAnchor:[15,15]}),zIndexOffset:2000,draggable:true}).addTo(map);
   depotMarker.bindTooltip('출발·집결지 (끌어서 옮길 수 있음)',{direction:'top',offset:[0,-12]});
   depotMarker.on('dragend',()=>{ const ll=depotMarker.getLatLng(); depot={lon:ll.lng,lat:ll.lat,name:'지정 출발지'}; recompute(); });
-  allBounds=L.latLngBounds(D.objects.map(o=>[o.lat,o.lon]).concat([[depot.lat,depot.lon]]));
+  allBounds=L.latLngBounds(D.objects.map(ob=>[ob.lat,ob.lon]).concat([[depot.lat,depot.lon]]));
   const refit=()=>{ const el=map.getContainer(); if(el.clientWidth>0&&el.clientHeight>0){ map.invalidateSize(); if(!fitted){ fitted=true; map.fitBounds(allBounds.pad(0.08),{animate:false}); } } };
   refit(); map.whenReady(refit); window.addEventListener('load',refit); setTimeout(refit,300); setTimeout(refit,1500);
   if (window.ResizeObserver) new ResizeObserver(refit).observe(map.getContainer());
@@ -489,74 +532,116 @@ function initMap(){
 }
 function renderMap(R){
   if(!map) return; layers.route.clearLayers(); layers.obj.clearLayers(); layers.zone.clearLayers(); zoneMarkers={};
-  for(const z of R.zones){ const col=DAYC[(z.day-1)%DAYC.length]; const ap=z.approach.map(toLL); const rest=z.path.slice(Math.max(z.approach.length-1,0)).map(toLL);
+  for(const z of R.zones){ const col=colorOf(z,R); const ap=z.approach.map(toLL); const rest=z.path.slice(Math.max(z.approach.length-1,0)).map(toLL);
     if(ap.length>1){ L.polyline(ap,{color:'#fff',weight:7,opacity:.85}).addTo(layers.route); L.polyline(ap,{color:col,weight:3.5,dashArray:'10 8'}).addTo(layers.route); }
     if(rest.length>1){ L.polyline(rest,{color:'#fff',weight:7,opacity:.85}).addTo(layers.route); L.polyline(rest,{color:col,weight:4}).addTo(layers.route); } }
-  if (R.backPath.length>1){ const bp=R.backPath.map(toLL); const col=DAYC[(R.zones[R.zones.length-1].day-1)%DAYC.length]; L.polyline(bp,{color:'#fff',weight:7,opacity:.85}).addTo(layers.route); L.polyline(bp,{color:col,weight:3.5,dashArray:'4 8'}).addTo(layers.route); }
-  const stepOf={}; R.zones.forEach(z=>z.objects.forEach(o=>stepOf[o.id]=z.step));
-  for(const o of R.objs){ const m=L.circleMarker([o.lat,o.lon],{radius:o.inc?(o.heavy?9:6):4,color:o.inc?'#111':'#777',weight:1.2,fillColor:o.inc?o.color:'#bbb',fillOpacity:.95}).addTo(layers.obj);
-    m.bindPopup(`<b>${o.inc?`${stepOf[o.id]}-${o.order} · `:'(제외) '}${esc(o.ko)}</b><br>크기 ${o.w.toFixed(1)}×${o.h.toFixed(1)} m (${o.area.toFixed(1)} m²)<br>무게 ${fmtKg(o.kg)} kg (범위 ${fmtKg(o.kmin)}–${fmtKg(o.kmax)})<br><span style="color:#888">기업 제공값 ${o.ckg!=null?o.ckg.toFixed(3):'-'} kg</span>${o.heavy?'<br><b style="color:#c0392b">⚠ 2인 운반</b>':''}${o.img?`<img src="${o.img}" alt="">`:''}`); }
-  for(const z of R.zones){ const col=DAYC[(z.day-1)%DAYC.length]; const ic=L.divIcon({className:'',html:`<div class="zn" style="border-color:${col}">${z.step}</div>`,iconSize:[34,34],iconAnchor:[17,17]});
+  for(const t of R.teams){ if (t.backPath.length>1){ const bp=t.backPath.map(toLL); const last=R.zones.filter(z=>z.team===t.team).slice(-1)[0]; const col=last?colorOf(last,R):'#555'; L.polyline(bp,{color:'#fff',weight:7,opacity:.85}).addTo(layers.route); L.polyline(bp,{color:col,weight:3.5,dashArray:'4 8'}).addTo(layers.route); } }
+  const stepOf={}; R.zones.forEach(z=>z.objects.forEach(ob=>stepOf[ob.id]=z.step));
+  for(const ob of R.objs){ const m=L.circleMarker([ob.lat,ob.lon],{radius:ob.inc?(ob.heavy?9:6):4,color:ob.done?'#1baf7a':(ob.inc?'#111':'#777'),weight:ob.done?2:1.2,fillColor:ob.inc?ob.color:(ob.done?'#b9f0d8':'#bbb'),fillOpacity:.95}).addTo(layers.obj);
+    const state = ob.done ? '✅ 완료' : (ob.inc ? `${stepOf[ob.id]}-${ob.order}` : '(제외)');
+    m.bindPopup(`<b>${state} · ${esc(ob.ko)}</b><br>크기 ${ob.w.toFixed(1)}×${ob.h.toFixed(1)} m (${ob.area.toFixed(1)} m²)<br>무게 ${fmtKg(ob.kg)} kg (범위 ${fmtKg(ob.kmin)}–${fmtKg(ob.kmax)})<br><span style="color:#888">기업 제공값 ${ob.ckg!=null?ob.ckg.toFixed(3):'-'} kg</span>${ob.heavy?'<br><b style="color:#c0392b">⚠ 2인 운반</b>':''}${ob.img?`<img src="${ob.img}" alt="">`:''}<br><a href="#" onclick="toggleDone(['${ob.id}']);return false;">${ob.done?'완료 취소':'이 물체 완료'}</a>`); }
+  for(const z of R.zones){ const col=colorOf(z,R); const lab=(R.nTeams>1?teamName(z.team):'')+z.step; const ic=L.divIcon({className:'',html:`<div class="zn" style="border-color:${col}">${lab}</div>`,iconSize:[34,34],iconAnchor:[17,17]});
     const m=L.marker([z.lat,z.lon],{icon:ic,zIndexOffset:1000}).addTo(layers.zone); zoneMarkers[z.step]=m;
     const comp=Object.entries(z.byCode).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`${esc(D.mats[c]?D.mats[c].ko:c)} ${n}개`).join(', ');
-    m.bindPopup(`<b>${z.step}. ${esc(z.name)}</b><br>${comp}<br>무게 ${fmtKg(z.kg)} kg · 마대 ${z.bags}장<br>접근 ${Math.round(z.dIn)} m · 이동 ${Math.round(z.walkMin)}분 · 작업 ${Math.round(z.workMin)}분${z.heavy.length?`<br><b style="color:#c0392b">⚠ 2인 운반 물체 ${z.heavy.length}개</b>`:''}`);
+    m.bindPopup(`<b>${z.step}. ${esc(z.name)}</b>${R.nTeams>1?` · ${teamName(z.team)}팀`:''}<br>${comp}<br>무게 ${fmtKg(z.kg)} kg · 마대 ${z.bags}장<br>접근 ${Math.round(z.dIn)} m · 이동 ${Math.round(z.walkMin)}분 · 작업 ${Math.round(z.workMin)}분${z.heavy.length?`<br><b style="color:#c0392b">⚠ 2인 운반 물체 ${z.heavy.length}개</b>`:''}<br>${navLinks(z.name,z.lat,z.lon)}<br><a href="#" onclick="doneZone(${z.step});return false;">이 구역 완료</a>`);
     m.on('click',()=>highlight(z.step,false)); }
   if (depotMarker) depotMarker.setLatLng([depot.lat,depot.lon]);
 }
 window.highlight=(step,fly=true)=>{ document.querySelectorAll('.step').forEach(e=>e.classList.toggle('active',+e.dataset.step===step)); if(!map||!CUR)return; const z=CUR.zones.find(z=>z.step===step); if(!z)return; if(fly){ const b=L.latLngBounds(z.path.map(toLL)); map.flyToBounds(b.pad(0.4),{maxZoom:19}); zoneMarkers[step]&&zoneMarkers[step].openPopup(); $('#map').scrollIntoView({behavior:'smooth',block:'center'}); } };
-window.showDay=(d)=>{ if(!map||!CUR)return; const zs=CUR.zones.filter(z=>z.day===d); if(!zs.length)return; const pts=[].concat(...zs.map(z=>z.path.map(toLL))); map.flyToBounds(L.latLngBounds(pts).pad(0.15)); };
+window.showDay=(team,d)=>{ if(!map||!CUR)return; const zs=CUR.zones.filter(z=>z.team===team&&z.day===d); if(!zs.length)return; const pts=[].concat(...zs.map(z=>z.path.map(toLL))); map.flyToBounds(L.latLngBounds(pts).pad(0.15)); };
 function renderTiles(R){ const t=R.totals;
-  const tiles=[['수거할 쓰레기',`${R.inc.length}개`,`구역 ${t.zones}곳${R.skipped?` · 제외 ${R.skipped}개`:''}`],['예상 무게',`${fmtKg(t.kg)} kg`,`범위 ${fmtKg(t.kmin)}–${fmtKg(t.kmax)} kg`],['마대',`${t.bags}장`,`부피 약 ${(t.vol*D.bag.bulk).toFixed(1)} m³`],['총 작업 시간',fmtMin(R.totalMin),`이동 ${fmtMin(R.totalWalk)} + 작업 ${fmtMin(R.totalWork)}`],['일정',`${R.days.length}일`,`${P.workers}명 · 하루 ${P.hours_per_day}시간`],['이동 거리',`${(R.routeLen/1000).toFixed(1)} km`,(T?'지형 최단경로(걷기 환산)':'직선×우회')+(t.returns?` · 복귀 ${t.returns}회`:'')],['2인 운반 물체',`${t.heavy}개`,'23 kg 넘을 수 있음']];
+  const tiles=[['수거할 쓰레기',`${R.inc.length}개`,`구역 ${t.zones}곳${R.skipped?` · 제외 ${R.skipped}개`:''}`],['예상 무게',`${fmtKg(t.kg)} kg`,`범위 ${fmtKg(t.kmin)}–${fmtKg(t.kmax)} kg`],['마대',`${t.bags}장`,`부피 약 ${(t.vol*D.bag.bulk).toFixed(1)} m³`],
+    [R.nTeams>1?'가장 오래 걸리는 팀':'총 작업 시간',fmtMin(R.totalMin),R.nTeams>1?`${R.nTeams}팀 × ${R.o.workers}명 · 전 팀 합 ${fmtMin(R.totalWalk+R.totalWork)}`:`이동 ${fmtMin(R.totalWalk)} + 작업 ${fmtMin(R.totalWork)}`],
+    ['일정',`${Math.max(0,...R.teams.map(x=>x.days))}일`,`팀당 ${R.o.workers}명 · 하루 ${R.o.hours}시간`],['이동 거리',`${(R.routeLen/1000).toFixed(1)} km`,(T?'지형 최단경로(걷기 환산)':'직선×우회')+(t.returns?` · 복귀 ${t.returns}회`:'')+(R.nTeams>1?' · 전 팀 합':'')],['2인 운반 물체',`${t.heavy}개`,'23 kg 넘을 수 있음'],
+    ['진행',`${t.all?Math.round(t.done/t.all*100):0} %`,`완료 ${t.done}/${t.all}개 · ${fmtKg(t.doneKg)} kg`]];
   $('#tiles').innerHTML=tiles.map(([l,v,s])=>`<div class="tile"><div class="lab">${l}</div><div class="val">${v}</div><div class="sub">${s}</div></div>`).join('');
-  $('#daybtns').innerHTML='<button onclick="fitAll()">전체 보기</button>'+R.days.map(d=>`<button onclick="showDay(${d.day})" style="border-color:${DAYC[(d.day-1)%DAYC.length]}">${d.day}일차 보기</button>`).join('');
-  $('#legend').innerHTML=Object.entries(R.byCode).sort((a,b)=>b[1].count-a[1].count).map(([c,d])=>`<span><i class="dot" style="background:${d.color}"></i>${esc(d.ko)} ${d.count}개</span>`).join('')+'<span><i class="dot" style="background:#bbb;border-color:#777"></i>제외</span><span><i class="dia"></i>2인 운반(무거움)</span><span>★ 출발·집결지 (끌어서 변경)</span><span>점선 = 구역 접근 / 복귀</span>'+R.days.map(d=>`<span><i style="display:inline-block;width:22px;height:4px;background:${DAYC[(d.day-1)%DAYC.length]};vertical-align:middle;margin-right:4px"></i>${d.day}일차 경로</span>`).join('');
-  $('#status').textContent=`${Math.round(R.ms)} ms 에 다시 계산 · ${R.mode==='boat'?'보트 지원':'도보'} · ${R.carry==='carry'?'들고 이동':'현장 적치'} · ${R.objective==='weight'?'무게 우선':'최단 이동'}${R.unreachable?` · 경로 없음 ${R.unreachable}쌍(직선 대체)`:''}`;
+  $('#daybtns').innerHTML='<button onclick="fitAll()">전체 보기</button>'+R.days.map(d=>`<button onclick="showDay(${d.team},${d.day})" style="border-color:${R.nTeams>1?TEAMC[(d.team-1)%TEAMC.length]:DAYC[(d.day-1)%DAYC.length]}">${R.nTeams>1?teamName(d.team)+'팀 ':''}${d.day}일차</button>`).join('')+'<button onclick="locateMe()">📍 내 위치</button>';
+  $('#legend').innerHTML=Object.entries(R.byCode).sort((a,b)=>b[1].count-a[1].count).map(([c,d])=>`<span><i class="dot" style="background:${d.color}"></i>${esc(d.ko)} ${d.count}개</span>`).join('')+'<span><i class="dot" style="background:#b9f0d8;border-color:#1baf7a"></i>완료</span><span><i class="dot" style="background:#bbb;border-color:#777"></i>제외</span><span><i class="dia"></i>2인 운반(무거움)</span><span>★ 출발·집결지 (끌어서 변경)</span><span>점선 = 구역 접근 / 복귀</span>'+(R.nTeams>1?R.teams.map(x=>`<span><i style="display:inline-block;width:22px;height:4px;background:${TEAMC[(x.team-1)%TEAMC.length]};vertical-align:middle;margin-right:4px"></i>${teamName(x.team)}팀 경로</span>`).join(''):R.days.map(d=>`<span><i style="display:inline-block;width:22px;height:4px;background:${DAYC[(d.day-1)%DAYC.length]};vertical-align:middle;margin-right:4px"></i>${d.day}일차 경로</span>`).join(''));
+  $('#status').textContent=`${Math.round(R.ms)} ms 에 다시 계산 · ${R.mode==='boat'?'보트 지원':'도보'} · ${R.o.carry==='carry'?'들고 이동':'현장 적치'} · ${R.o.objective==='weight'?'무게 우선':'최단 이동'}${R.nTeams>1?` · ${R.nTeams}팀`:''}${R.unreachable?` · 경로 없음 ${R.unreachable}쌍(직선 대체)`:''}`;
 }
 function renderSteps(R){
   let h='';
-  for(const d of R.days){ const col=DAYC[(d.day-1)%DAYC.length]; h+=`<div class="day"><span class="pill" style="background:${col}">${d.day}일차</span><h3>${d.steps.length}개 구역 · 약 ${fmtMin(d.minutes)}</h3></div><div class="steps">`;
-    for(const z of R.zones.filter(z=>z.day===d.day)){ const chips=Object.entries(z.byCode).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<span class="chip" style="background:${D.mats[c]?D.mats[c].color:'#ccc'}">${esc(D.mats[c]?D.mats[c].ko:c)} ${n}</span>`).join('');
-      const warn=z.notes.map(n=>`<div class="warn">⚠ ${esc(n)}</div>`).join(''); const tools=z.tools.length?` · 도구: ${esc(z.tools.join(', '))}`:'';
-      const phs=z.objects.map((o,i)=>o.img?`<div class="ph"><img src="${o.img}" alt="" title="${esc(o.id)}"><small>${z.step}-${i+1}</small></div>`:'').join('');
-      h+=`<div class="step" data-step="${z.step}" style="border-left-color:${col}" onclick="highlight(${z.step})"><div class="head"><div class="num" style="background:${col}">${z.step}</div><div><div class="name">${esc(z.name)}</div><div class="meta">이전 지점에서 ${Math.round(z.dIn)} m · 이 구역 이동 ${Math.round(z.walkMin)}분${tools}</div></div></div><div class="chips">${chips}</div><div class="facts"><div class="fact"><b>${z.n}</b><span>개</span></div><div class="fact"><b>${fmtKg(z.kg)}</b><span>kg (${fmtKg(z.kmin)}–${fmtKg(z.kmax)})</span></div><div class="fact"><b>${z.bags}</b><span>마대</span></div><div class="fact"><b>${Math.round(z.workMin)}</b><span>분 작업</span></div></div>${warn}<div class="photos">${phs}</div></div>`; }
-    h+='</div>'; }
-  if(!R.zones.length) h='<p class="sub">선택한 조건에 맞는 쓰레기가 없습니다. 종류·최소 무게를 확인하세요.</p>';
+  for(const tm of R.teams){ if (R.nTeams>1){ const col=TEAMC[(tm.team-1)%TEAMC.length]; h+=`<div class="team"><span class="pill" style="background:${col}">${teamName(tm.team)}팀</span><h3>${tm.zones.length}개 구역 · ${tm.n}개 · ${fmtKg(tm.kg)} kg · 마대 ${tm.bags}장 · ${fmtMin(tm.minutes)} · ${tm.days}일</h3></div>`; }
+    for(const d of R.days.filter(d=>d.team===tm.team)){ const col=R.nTeams>1?TEAMC[(d.team-1)%TEAMC.length]:DAYC[(d.day-1)%DAYC.length]; h+=`<div class="day"><span class="pill" style="background:${col}">${d.day}일차</span><h3>${d.steps.length}개 구역 · 약 ${fmtMin(d.minutes)}</h3></div><div class="steps">`;
+      for(const z of R.zones.filter(z=>z.team===tm.team&&z.day===d.day)){ const chips=Object.entries(z.byCode).sort((a,b)=>b[1]-a[1]).map(([c,n])=>`<span class="chip" style="background:${D.mats[c]?D.mats[c].color:'#ccc'}">${esc(D.mats[c]?D.mats[c].ko:c)} ${n}</span>`).join('');
+        const warn=z.notes.map(n=>`<div class="warn">⚠ ${esc(n)}</div>`).join(''); const tools=z.tools.length?` · 도구: ${esc(z.tools.join(', '))}`:'';
+        const phs=z.objects.map((ob,i)=>ob.img?`<div class="ph"><img src="${ob.img}" alt="" title="${esc(ob.id)}"><small>${z.step}-${i+1}</small></div>`:'').join('');
+        h+=`<div class="step" data-step="${z.step}" style="border-left-color:${col}" onclick="highlight(${z.step})"><div class="head"><div class="num" style="background:${col}">${z.step}</div><div style="flex:1;min-width:0"><div class="name">${esc(z.name)}</div><div class="meta">이전 지점에서 ${Math.round(z.dIn)} m · 이 구역 이동 ${Math.round(z.walkMin)}분${tools}</div></div><button class="donebtn" onclick="event.stopPropagation();doneZone(${z.step})">완료 ✓</button></div><div class="chips">${chips}</div><div class="facts"><div class="fact"><b>${z.n}</b><span>개</span></div><div class="fact"><b>${fmtKg(z.kg)}</b><span>kg (${fmtKg(z.kmin)}–${fmtKg(z.kmax)})</span></div><div class="fact"><b>${z.bags}</b><span>마대</span></div><div class="fact"><b>${Math.round(z.workMin)}</b><span>분 작업</span></div></div>${warn}<div class="photos">${phs}</div><div class="links" onclick="event.stopPropagation()">${navLinks(z.name,z.lat,z.lon)}</div></div>`; }
+      h+='</div>'; } }
+  if(!R.zones.length) h='<p class="sub">'+(R.totals.all&&R.totals.done>=R.totals.all?'선택한 쓰레기를 모두 수거했습니다 🎉':'선택한 조건에 맞는 쓰레기가 없습니다. 종류·최소 무게를 확인하세요.')+'</p>';
   $('#steps').innerHTML=h;
   $('#equip').innerHTML=R.equipment.map(e=>`<li>${esc(e)}</li>`).join('');
   $('#bycode').innerHTML=Object.entries(R.byCode).sort((a,b)=>b[1].kg-a[1].kg).map(([c,d])=>{ const m=D.mats[c]||{}; return `<tr><td><i class="dot" style="background:${d.color}"></i>${esc(d.ko)}</td><td class="num">${d.count}</td><td class="num">${d.area.toFixed(1)}</td><td class="num"><b>${fmtKg(d.kg)}</b></td><td class="num">${fmtKg(d.kmin)}–${fmtKg(d.kmax)}</td><td class="num">${d.ckg.toFixed(3)}</td><td>${esc(m.handling||'-')}${m.tool?' · 도구: '+esc(m.tool):''}</td></tr>`; }).join('');
-  const stepOf={}; R.zones.forEach(z=>z.objects.forEach(o=>stepOf[o.id]=z.step));
+  const stepOf={}; R.zones.forEach(z=>z.objects.forEach(ob=>stepOf[ob.id]=z.step));
   const rows=R.objs.slice().sort((a,b)=>(a.inc?0:1)-(b.inc?0:1)||(stepOf[a.id]||0)-(stepOf[b.id]||0)||a.order-b.order);
-  $('#objtab').innerHTML=rows.map(o=>`<tr class="${o.inc?'':'off'}"><td>${o.inc?`${stepOf[o.id]}-${o.order}`:'제외'}</td><td>${esc(o.id)}</td><td><i class="dot" style="background:${o.color}"></i>${esc(o.ko)}</td><td class="num">${o.w.toFixed(1)}×${o.h.toFixed(1)}</td><td class="num">${o.area.toFixed(2)}</td><td class="num"><b>${fmtKg(o.kg)}</b></td><td class="num">${fmtKg(o.kmin)}–${fmtKg(o.kmax)}</td><td class="num">${o.ckg!=null?o.ckg:'-'}</td><td>${o.heavy?'⚠ 2인 운반':''}</td></tr>`).join('');
-  $('#assume-params').textContent=`구역 묶기 ${P.link_m} m · 걷기 ${P.walk_kmh} km/h · 물체당 ${P.item_min}분 + ${P.min_per_m2}분/m² · 마대 ${P.bag_kg} kg / ${P.bag_l} L · 1인 운반 ${P.carry_kg_per_person} kg·${P.carry_bags_per_person}마대 · 숲 통과 ×${P.veg_cost} · 보트 ×${P.boat_cost}${T?'':' · 우회 ×'+P.detour} (가정값)`;
+  $('#objtab').innerHTML=rows.map(ob=>`<tr class="${ob.inc?'':'off'}"><td>${ob.done?'✅':(ob.inc?`${stepOf[ob.id]}-${ob.order}`:'제외')}</td><td>${esc(ob.id)}</td><td><i class="dot" style="background:${ob.color}"></i>${esc(ob.ko)}</td><td class="num">${ob.w.toFixed(1)}×${ob.h.toFixed(1)}</td><td class="num">${ob.area.toFixed(2)}</td><td class="num"><b>${fmtKg(ob.kg)}</b></td><td class="num">${fmtKg(ob.kmin)}–${fmtKg(ob.kmax)}</td><td class="num">${ob.ckg!=null?ob.ckg:'-'}</td><td>${ob.heavy?'⚠ 2인 운반':''}</td></tr>`).join('');
+  // 진행 현황
+  const t=R.totals; const pct=t.all?Math.round(t.done/t.all*100):0;
+  $('#progress').innerHTML=`<div class="bar"><div style="width:${pct}%"></div></div><p class="sub">완료 ${t.done}개 / 선택 ${t.all}개 (${pct} %) · 완료 무게 ${fmtKg(t.doneKg)} kg · 남은 ${R.inc.length}개 ${fmtKg(t.kg)} kg · 남은 시간 ${fmtMin(R.totalMin)}</p>`+(t.done?`<div class="btns"><button onclick="resetDone()">완료 전부 취소</button></div>`:'');
+  // 실측 보정: 구역 선택 목록
+  const sel=$('#cal-zone'); if(sel){ const curv=sel.value; sel.innerHTML=R.zones.map(z=>`<option value="${z.step}">${z.step}. ${esc(z.name)} (예상 ${fmtKg(z.kg)} kg)</option>`).join(''); if([...sel.options].some(o=>o.value===curv)) sel.value=curv; }
+  $('#assume-params').textContent=`구역 묶기 ${P.link_m} m · 걷기 ${P.walk_kmh} km/h · 물체당 ${P.item_min}분 + ${P.min_per_m2}분/m² · 마대 ${P.bag_kg} kg / ${P.bag_l} L · 1인 운반 ${P.carry_kg_per_person} kg·${P.carry_bags_per_person}마대 · 숲 통과 ×${P.veg_cost} · 보트 ×${P.boat_cost}${T?'':' · 우회 ×'+P.detour}`+(Object.values(ST.calib).some(v=>v!==1)?` · 실측 보정 ${Object.entries(ST.calib).filter(([c,v])=>v!==1).map(([c,v])=>`${D.mats[c]?D.mats[c].ko:c} ×${v.toFixed(2)}`).join(', ')}`:'')+' (가정값)';
 }
 let CUR=null, timer=null;
-function recompute(){ const busy=$('#busy'); busy.style.display='flex'; setTimeout(()=>{ try{ readControls(); CUR=computePlan(); renderTiles(CUR); renderMap(CUR); renderSteps(CUR); } catch(e){ console.error(e); $('#status').textContent='계산 오류: '+e.message; } busy.style.display='none'; },10); }
+function recompute(){ const busy=$('#busy'); busy.style.display='flex'; setTimeout(()=>{ try{ readControls(); CUR=computePlan(opts()); renderTiles(CUR); renderMap(CUR); renderSteps(CUR); } catch(e){ console.error(e); $('#status').textContent='계산 오류: '+e.message; } busy.style.display='none'; },10); }
 window.recompute=recompute;
 window.scheduleRecompute=()=>{ clearTimeout(timer); timer=setTimeout(recompute,150); };
 window.resetAll=()=>{ for(const [id,v] of Object.entries(D.control_defaults)){ const el=document.getElementById(id); if(!el)continue; if(el.type==='checkbox') el.checked=v; else el.value=v; } document.querySelectorAll('.codes input').forEach(e=>e.checked=true); for(const [n,v] of Object.entries(D.seg_defaults)) setSeg(n,v); depot=Object.assign({},defaultDepot); recompute(); if(map) fitAll(); };
-window.downloadCsv=()=>{ if(!CUR)return; const rows=[['순서','일차','구역','개수','구성','계획 무게(kg)','최소(kg)','최대(kg)','기업값(kg)','부피(m³)','마대','접근(m)','이동(분)','작업(분)','누적(분)','복귀','주의']];
-  for(const z of CUR.zones) rows.push([z.step,z.day,z.name,z.n,Object.entries(z.byCode).map(([c,n])=>`${D.mats[c]?D.mats[c].ko:c} ${n}`).join(' '),z.kg.toFixed(2),z.kmin.toFixed(2),z.kmax.toFixed(2),z.ckg.toFixed(3),z.m3.toFixed(3),z.bags,Math.round(z.dIn),z.walkMin.toFixed(1),z.workMin.toFixed(1),z.cumMin.toFixed(1),z.returns,z.notes.join(' / ')]);
-  const csv='\ufeff'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n'); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download='수거계획_작업순서.csv'; a.click(); };
-window.downloadJson=()=>{ if(!CUR)return; const out={params:P, depot, travel:CUR.mode, carry:CUR.carry, objective:CUR.objective, totals:CUR.totals, days:CUR.days, zones:CUR.zones.map(z=>({step:z.step,day:z.day,name:z.name,n:z.n,kg:z.kg,kmin:z.kmin,kmax:z.kmax,bags:z.bags,dIn:z.dIn,distTot:z.distTot,walkMin:z.walkMin,workMin:z.workMin,returns:z.returns,objects:z.objects.map(o=>o.id),notes:z.notes}))};
+// 진행 체크
+window.toggleDone=(ids)=>{ for(const id of ids){ if(ST.done.has(id)) ST.done.delete(id); else ST.done.add(id); } persist(); recompute(); };
+window.doneZone=(step)=>{ if(!CUR)return; const z=CUR.zones.find(z=>z.step===step); if(!z)return; z.objects.forEach(ob=>ST.done.add(ob.id)); persist(); recompute(); };
+window.resetDone=()=>{ ST.done.clear(); persist(); recompute(); };
+// 내 위치
+window.locateMe=()=>{ if(!navigator.geolocation){ $('#status').textContent='이 기기에서는 위치를 쓸 수 없습니다'; return; }
+  navigator.geolocation.getCurrentPosition(pos=>{ const lat=pos.coords.latitude, lon=pos.coords.longitude; if(map){ if(!meMarker){ meMarker=L.circleMarker([lat,lon],{radius:9,color:'#fff',weight:3,fillColor:'#e34948',fillOpacity:1}).addTo(map); meMarker.bindTooltip('내 위치'); } else meMarker.setLatLng([lat,lon]); }
+    if(!CUR||!CUR.zones.length){ $('#status').textContent='내 위치 표시'; if(map) map.flyTo([lat,lon],17); return; }
+    const xy=ll2xy(lon,lat); let best=null;
+    if (T){ forcePassable(xy); const {dist}=dijkstra(CUR.mode, cellOf(xy[0],xy[1])); for(const z of CUR.zones){ const d=z.firstCell!=null?dist[z.firstCell]:Infinity; if(isFinite(d)&&(best===null||d<best.d)) best={z,d}; } }
+    if(!best){ for(const z of CUR.zones){ const d=Math.hypot(z.cx-xy[0],z.cy-xy[1])*P.detour; if(best===null||d<best.d) best={z,d}; } }
+    const min=best.d/1000/P.walk_kmh*60; $('#status').textContent=`내 위치에서 가장 가까운 구역: ${best.z.step}. ${best.z.name} · ${Math.round(best.d)} m · 약 ${Math.round(min)}분`;
+    if(map){ map.flyToBounds(L.latLngBounds([[lat,lon],[best.z.lat,best.z.lon]]).pad(0.3)); } highlight(best.z.step,false);
+  }, err=>{ $('#status').textContent='위치를 가져오지 못했습니다 ('+err.message+'). HTTPS 주소에서, 위치 권한을 허용해야 합니다'; }, {enableHighAccuracy:true, timeout:10000});
+};
+// 실측 보정
+window.applyMeasured=()=>{ if(!CUR)return; const step=parseInt($('#cal-zone').value,10); const kg=parseFloat($('#cal-kg').value); const z=CUR.zones.find(z=>z.step===step); if(!z||!isFinite(kg)||kg<=0){ $('#cal-msg').textContent='구역과 실측 무게(kg)를 입력하세요'; return; }
+  const base=z.objects.reduce((s,ob)=>s+ob.kg/((ST.calib[ob.code]||1)),0); if(base<=0){ $('#cal-msg').textContent='이 구역의 예상 무게가 0 입니다'; return; }
+  const f=kg/base; const codes=[...new Set(z.objects.map(ob=>ob.code))]; for(const c of codes){ ST.calib[c]=Math.round(f*100)/100; const el=$('#c-cal-'+c); if(el) el.value=ST.calib[c]; } persist();
+  $('#cal-msg').textContent=`구역 ${step} 예상 ${fmtKg(base)} kg → 실측 ${fmtKg(kg)} kg : ${codes.map(c=>D.mats[c]?D.mats[c].ko:c).join('·')} 보정 계수 ×${f.toFixed(2)} 적용`; recompute(); };
+window.resetCalib=()=>{ for(const c of Object.keys(ST.calib)){ ST.calib[c]=1; const el=$('#c-cal-'+c); if(el) el.value=1; } persist(); $('#cal-msg').textContent='보정 계수를 1로 되돌렸습니다'; recompute(); };
+// 시나리오 비교 + 민감도
+window.compareScenarios=()=>{ readControls(); const cur=opts(); const rows=[['현재 설정',cur]];
+  if(T) rows.push(['도보 · 현장 적치',opts({travel:'walk',carry:'pile'})],['보트 지원 · 현장 적치',opts({travel:'boat',carry:'pile'})]);
+  rows.push([`${cur.workers*2}명 (인원 2배)`,opts({workers:cur.workers*2})],['팀 2개',opts({teams:2})],['들고 이동',opts({carry:'carry'})],['무게 우선 순서',opts({objective:'weight'})],['무게 추정 최소값',opts({wsrc:'ours',wstat:'min'})],['무게 추정 최대값',opts({wsrc:'ours',wstat:'max'})],['무게 ×0.5 (민감도)',opts({scale:0.5})],['무게 ×1.5 (민감도)',opts({scale:1.5})]);
+  const out=rows.map(([name,o])=>{ const R=computePlan(o); return `<tr><td>${esc(name)}</td><td class="num">${R.totals.zones}</td><td class="num">${fmtKg(R.totals.kg)}</td><td class="num">${R.totals.bags}</td><td class="num">${(R.routeLen/1000).toFixed(1)}</td><td class="num">${fmtMin(R.totalMin)}</td><td class="num">${Math.max(0,...R.teams.map(x=>x.days))}</td><td class="num">${R.totals.heavy}</td></tr>`; }).join('');
+  $('#scen').innerHTML=`<table><thead><tr><th>시나리오</th><th class="num">구역</th><th class="num">예상 kg</th><th class="num">마대</th><th class="num">이동 km</th><th class="num">총 시간</th><th class="num">일수</th><th class="num">2인 운반</th></tr></thead><tbody>${out}</tbody></table><p class="sub">같은 완료·종류·고급 설정에서 조건 하나씩만 바꾼 결과. 민감도 행은 모든 무게에 배수를 곱해 가정값(채움률·두께·밀도)의 영향을 본 것.</p>`; };
+window.downloadCsv=()=>{ if(!CUR)return; const rows=[['순서','팀','일차','구역','개수','구성','계획 무게(kg)','최소(kg)','최대(kg)','기업값(kg)','부피(m³)','마대','접근(m)','이동(분)','작업(분)','누적(분)','복귀','주의']];
+  for(const z of CUR.zones) rows.push([z.step,teamName(z.team),z.day,z.name,z.n,Object.entries(z.byCode).map(([c,n])=>`${D.mats[c]?D.mats[c].ko:c} ${n}`).join(' '),z.kg.toFixed(2),z.kmin.toFixed(2),z.kmax.toFixed(2),z.ckg.toFixed(3),z.m3.toFixed(3),z.bags,Math.round(z.dIn),z.walkMin.toFixed(1),z.workMin.toFixed(1),z.cumMin.toFixed(1),z.returns,z.notes.join(' / ')]);
+  const csv='﻿'+rows.map(r=>r.map(v=>`"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n'); const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv;charset=utf-8'})); a.download='수거계획_작업순서.csv'; a.click(); };
+window.downloadJson=()=>{ if(!CUR)return; const out={params:P, depot, options:CUR.o, calib:ST.calib, done:[...ST.done], totals:CUR.totals, teams:CUR.teams.map(t=>({team:t.team,zones:t.zones,n:t.n,kg:t.kg,bags:t.bags,minutes:t.minutes,days:t.days})), days:CUR.days, zones:CUR.zones.map(z=>({step:z.step,team:z.team,day:z.day,name:z.name,n:z.n,kg:z.kg,kmin:z.kmin,kmax:z.kmax,bags:z.bags,dIn:z.dIn,distTot:z.distTot,walkMin:z.walkMin,workMin:z.workMin,returns:z.returns,objects:z.objects.map(ob=>ob.id),notes:z.notes}))};
   const a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([JSON.stringify(out,null,1)],{type:'application/json'})); a.download='수거계획_설정결과.json'; a.click(); };
 document.querySelectorAll('.ctrl input, .ctrl select').forEach(el=>el.addEventListener('input',scheduleRecompute));
 document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{ setSeg(b.parentElement.dataset.name,b.dataset.v); recompute(); }));
+for (const [c,v] of Object.entries(ST.calib)) { const el=$('#c-cal-'+c); if (el) el.value=v; }
 initMap(); recompute();
 })();
 """
 
 
 def _control_panel(d: dict, mats: dict, terrain: bool, present_codes: list[str], artifact: bool = False) -> str:
+    esc = _esc
     def seg(name, opts, cur):
         return f'<div class="seg" data-name="{name}">' + "".join(
-            f'<button data-v="{v}" class="{"on" if v == cur else ""}">{_esc(t)}</button>' for v, t in opts) + "</div>"
-    codes = "".join(f'<label><input type="checkbox" value="{c}" checked><i style="background:{mats[c]["color"]}"></i>{_esc(mats[c]["ko"])}</label>'
+            f'<button data-v="{v}" class="{"on" if v == cur else ""}">{esc(t)}</button>' for v, t in opts) + "</div>"
+    codes = "".join(f'<label><input type="checkbox" value="{c}" checked><i style="background:{mats[c]["color"]}"></i>{esc(mats[c]["ko"])}</label>'
                     for c in present_codes)
+    cal = "".join(f'<label><b>{esc(mats[c]["ko"])} 보정 계수</b><input type="number" id="c-cal-{c}" min="0.05" max="20" step="0.05" value="1"></label>'
+                  for c in present_codes)
     travel_opts = [("walk", "도보"), ("boat", "보트 지원")] if terrain else [("walk", "도보 (지형 없음)")]
     return f"""
 <div class="panel"><h2><span>조건 바꾸기 → 바로 다시 계산</span><span id="status">…</span></h2>
 <div class="ctrl">
- <label><b>작업 인원</b><input type="number" id="c-workers" min="1" max="30" step="1" value="{d['workers']}"></label>
+ <label><b>팀당 인원</b><input type="number" id="c-workers" min="1" max="30" step="1" value="{d['workers']}"></label>
+ <label><b>팀 수 (동시 투입)</b><input type="number" id="c-teams" min="1" max="6" step="1" value="{d['teams']}"></label>
  <label><b>하루 작업 시간</b><input type="number" id="c-hours" min="0.5" max="12" step="0.5" value="{d['hours_per_day']}"></label>
  <label><b>이동 방식</b>{seg('travel', travel_opts, d['travel'])}</label>
  <label><b>운반 방식</b>{seg('carry', [('pile', '현장 적치'), ('carry', '들고 이동')], d['carry'])}</label>
@@ -564,9 +649,10 @@ def _control_panel(d: dict, mats: dict, terrain: bool, present_codes: list[str],
  <label><b>무게 기준</b>{seg('wsrc', [('ours', '우리 추정'), ('company', '기업값')], d['weight_source'])}</label>
  <label><b>추정 범위 (우리 추정일 때)</b>{seg('wstat', [('min', '최소'), ('typ', '대표'), ('max', '최대')], d['weight_stat'])}</label>
  <label><b>최소 무게(kg) 미만 건너뜀</b><input type="number" id="c-minkg" min="0" step="0.1" value="{d['min_kg']}"></label>
+ <label><b>완료한 구역 제외</b><input type="checkbox" id="c-exdone" checked style="width:22px;height:22px"></label>
  <label style="grid-column:1/-1"><b>수거할 종류</b><div class="codes">{codes}</div></label>
 </div>
-<details class="adv"><summary>고급 설정 (가정값)</summary><div class="ctrl" style="margin-top:8px">
+<details class="adv"><summary>고급 설정 (가정값) · 실측 보정 계수</summary><div class="ctrl" style="margin-top:8px">
  <label><b>구역 묶기 거리 (m)</b><input type="number" id="c-link" min="20" max="2000" step="10" value="{d['link_m']}"></label>
  <label><b>걷기 속도 (km/h)</b><input type="number" id="c-walk" min="1" max="6" step="0.1" value="{d['walk_kmh']}"></label>
  <label><b>물체당 시간 (분)</b><input type="number" id="c-item" min="0" max="30" step="0.5" value="{d['item_min']}"></label>
@@ -579,8 +665,9 @@ def _control_panel(d: dict, mats: dict, terrain: bool, present_codes: list[str],
  <label><b>보트 이동 배수 (물)</b><input type="number" id="c-boat" min="0.1" max="3" step="0.1" value="{d['boat_cost']}"></label>
  <label><b>우회 배수 (지형 없을 때)</b><input type="number" id="c-detour" min="1" max="3" step="0.1" value="{d['detour']}"></label>
  <label><b>출발지 왕복</b><input type="checkbox" id="c-round" {"checked" if d['round_trip'] else ""} style="width:22px;height:22px"></label>
+ {cal}
 </div></details>
-<div class="btns"><button class="primary" onclick="recompute()">다시 계산</button><button onclick="resetAll()">초기화</button>{'' if artifact else '<button onclick="downloadCsv()">작업순서 CSV</button><button onclick="downloadJson()">설정·결과 JSON</button><button onclick="window.print()">인쇄</button>'}</div>
+<div class="btns"><button class="primary" onclick="recompute()">다시 계산</button><button onclick="resetAll()">초기화</button><button onclick="compareScenarios();document.getElementById('scen').scrollIntoView({{behavior:'smooth'}})">시나리오 비교</button>{'' if artifact else '<button onclick="downloadCsv()">작업순서 CSV</button><button onclick="downloadJson()">설정·결과 JSON</button><button onclick="window.print()">인쇄</button>'}</div>
 </div>"""
 
 
@@ -625,7 +712,7 @@ def build_collect_html(plan: CollectPlan, out_html: str | Path, *, photos_dir: s
         terrain_png = {"url": url, "bounds": list(bounds)}
     if center_xy is None:
         center_xy = (float(np.mean([o.x_m for o in plan.objects])), float(np.mean([o.y_m for o in plan.objects])))
-    defaults = {"workers": pp["workers"], "hours_per_day": pp["hours_per_day"], "link_m": pp["link_m"], "walk_kmh": pp["walk_kmh"],
+    defaults = {"workers": pp["workers"], "teams": pp.get("teams", 1), "hours_per_day": pp["hours_per_day"], "link_m": pp["link_m"], "walk_kmh": pp["walk_kmh"],
                 "item_min": pp["item_min"], "min_per_m2": pp["min_per_m2"], "heavy_extra_min": pp["heavy_extra_min"], "load_slow": pp["load_slow"],
                 "carry_kg_per_person": pp["carry_kg_per_person"], "carry_bags_per_person": pp["carry_bags_per_person"],
                 "min_kg": pp["min_kg"], "bag_kg": pp["bag"]["bag_kg"], "bag_l": round(pp["bag"]["bag_m3"] * 1000), "detour": pp["detour"],
@@ -634,7 +721,7 @@ def build_collect_html(plan: CollectPlan, out_html: str | Path, *, photos_dir: s
     if terrain is not None:
         from .terrain import COST, VEG, WATER
         defaults["veg_cost"] = COST["walk"][VEG]; defaults["boat_cost"] = COST["boat"][WATER]
-    control_defaults = {"c-workers": defaults["workers"], "c-hours": defaults["hours_per_day"], "c-link": defaults["link_m"], "c-walk": defaults["walk_kmh"],
+    control_defaults = {"c-workers": defaults["workers"], "c-teams": defaults["teams"], "c-hours": defaults["hours_per_day"], "c-link": defaults["link_m"], "c-walk": defaults["walk_kmh"],
                         "c-item": defaults["item_min"], "c-m2": defaults["min_per_m2"], "c-ckg": defaults["carry_kg_per_person"],
                         "c-cbags": defaults["carry_bags_per_person"], "c-minkg": defaults["min_kg"], "c-bagkg": defaults["bag_kg"],
                         "c-bagl": defaults["bag_l"], "c-veg": defaults["veg_cost"], "c-boat": defaults["boat_cost"], "c-detour": defaults["detour"],
@@ -670,7 +757,8 @@ def build_collect_html(plan: CollectPlan, out_html: str | Path, *, photos_dir: s
          '<div class="mapbtns" id="daybtns"></div>',
          f'<div id="map"><img id="fallback" class="fallback" style="display:none" src="{fallback or ""}" alt="수거 지도"><div class="busy" id="busy">계산 중…</div></div>',
          '<div class="legend" id="legend"></div></div>',
-         '<div class="card"><h2>작업 순서</h2><p class="sub">출발지에서 번호 순서대로 돕니다. 시간은 이동 + 줍기·담기 예상값입니다. 카드를 누르면 지도가 그 구역으로 갑니다.</p><div id="steps"></div></div>',
+         '<div class="card"><h2>작업 순서</h2><p class="sub">출발지에서 번호 순서대로 돕니다. 시간은 이동 + 줍기·담기 예상값입니다. 카드를 누르면 지도가 그 구역으로 가고, 완료 ✓ 를 누르면 남은 구역만으로 다시 계산됩니다. 길찾기 링크는 휴대폰에서 지도 앱으로 열립니다.</p><div id="steps"></div></div>',
+         '<div class="card"><h2>진행 현황</h2><p class="sub">구역 카드의 "완료 ✓" 를 누르면 그 구역이 완료 처리되고(이 휴대폰·브라우저에 저장), 남은 구역만으로 경로·시간이 다시 계산됩니다. 지도의 점을 눌러 물체 하나씩 완료할 수도 있습니다.</p><div id="progress"></div></div>\n<div class="card"><h2>실측 보정</h2><p class="sub">현장에서 한 구역의 마대를 저울로 재면, 예상 무게와 비교해 그 재질의 보정 계수를 자동으로 구하고 모든 구역에 적용합니다 (우리 추정 무게에만 곱함, 이 브라우저에 저장).</p>\n<div class="cal"><label><b>실측한 구역</b><select id="cal-zone"></select></label><label><b>실측 무게 (kg)</b><input type="number" id="cal-kg" min="0" step="0.1" placeholder="예: 12.5"></label><label><b>&nbsp;</b><button class="primary" style="font:inherit;padding:8px 12px;border-radius:9px;border:0;background:var(--accent);color:#fff;cursor:pointer" onclick="applyMeasured()">보정 계수 계산·적용</button></label><label><b>&nbsp;</b><button style="font:inherit;padding:8px 12px;border-radius:9px;border:1px solid var(--border);background:var(--card);color:var(--ink);cursor:pointer" onclick="resetCalib()">보정 해제</button></label></div><div id="cal-msg"></div></div>\n<div class="card"><h2>시나리오 비교 · 민감도</h2><p class="sub">버튼을 누르면 현재 설정에서 조건을 하나씩 바꾼 결과를 한 표로 보여 줍니다.</p><div class="btns" style="margin:0 0 10px"><button class="primary" onclick="compareScenarios()">시나리오 비교 계산</button></div><div id="scen" style="overflow:auto"></div></div>',
          '<div class="card"><h2>준비물 체크리스트</h2><ul class="check" id="equip"></ul></div>',
          '<div class="card"><h2>종류별 요약과 다루는 법</h2><table><thead><tr><th>종류</th><th class="num">개수</th><th class="num">면적 m²</th><th class="num">예상 kg</th><th class="num">범위 kg</th><th class="num">기업 제공 kg</th><th>다루는 법</th></tr></thead><tbody id="bycode"></tbody></table></div>',
          '<div class="card"><details><summary>전체 쓰레기 목록 (수거 순서)</summary><div style="overflow:auto;max-height:520px"><table><thead><tr><th>순서</th><th>ID</th><th>종류</th><th class="num">가로×세로 m</th><th class="num">면적 m²</th><th class="num">예상 kg</th><th class="num">범위</th><th class="num">기업 kg</th><th>비고</th></tr></thead><tbody id="objtab"></tbody></table></div></details></div>',

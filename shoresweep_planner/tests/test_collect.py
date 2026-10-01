@@ -148,3 +148,18 @@ def test_report_outputs(geojson, tmp_path):
     html = build_collect_html(plan, tmp_path / "plan.html", static_png=png, terrain=t)
     s = html.read_text(encoding="utf-8")
     assert "window.PLAN=" in s and "작업 순서" in s and "TST_0005_ROP" in s and '"terrain": {' in s and "c-workers" in s
+
+
+def test_teams_and_calibration(geojson):
+    objs = load_geojson(geojson)
+    base = dict(depot_lonlat=(126.079, 37.1695))
+    one = make_collect_plan(objs, CollectParams(**base))
+    two = make_collect_plan(objs, CollectParams(teams=2, **base))
+    assert len(two.teams) == 2 and {z.team for z in two.zones} == {1, 2}
+    assert two.total_min <= one.total_min                      # 동시에 일하니 가장 오래 걸리는 팀 기준 시간이 줄거나 같다
+    assert sum(len(t["zones"]) for t in two.teams) == len(two.zones)
+    sty_one = sum(o.plan_kg for o in one.objects if o.code == "STY")      # 같은 객체 목록을 다시 쓰므로 먼저 읽어 둔다
+    cal = make_collect_plan(objs, CollectParams(calib={"STY": 2.0}, **base))
+    sty_cal = sum(o.plan_kg for o in cal.objects if o.code == "STY")
+    assert sty_cal == pytest.approx(sty_one * 2.0)
+    assert any("보정" in a for a in cal.assumptions)

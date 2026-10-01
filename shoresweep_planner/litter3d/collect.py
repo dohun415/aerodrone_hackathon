@@ -95,6 +95,8 @@ class CollectParams:
     carry_kg_per_person: float = 15.0 # 가정값: 1인이 들고 걷는 무게
     carry_bags_per_person: int = 2    # 가정값: 1인이 들고 걷는 마대 수
     objective: str = "distance"       # "distance" | "weight"
+    teams: int = 1                    # 동시에 투입하는 팀 수 (순회를 시간 균형으로 나눔)
+    calib: dict | None = None         # 실측 보정 계수 {재질코드: 배수}. 우리 추정 무게에 곱함 (예: 현장 마대 저울값으로 산출)
     include_codes: list[str] | None = None   # None 이면 전부
     min_kg: float = 0.0               # 이 무게(계획값) 미만 물체는 건너뜀
     depot_lonlat: tuple[float, float] | None = None
@@ -104,6 +106,7 @@ class CollectParams:
     def to_dict(self) -> dict:
         d = asdict(self)
         d["bag"] = self.bag.to_dict()
+        d["calib"] = dict(self.calib or {})
         d["_note"] = "link_m·detour·walk_kmh·load_slow·item_min·min_per_m2·heavy_extra_min·운반·마대 적재량은 가정값. 23 kg 는 NIOSH."
         return d
 
@@ -204,12 +207,13 @@ def load_geojson(path: str | Path, crs_m: str = "EPSG:5186") -> list[LitterObjec
     return out
 
 
-def set_weight_source(objs: list[LitterObject], source: str, stat: str = "typ") -> None:
+def set_weight_source(objs: list[LitterObject], source: str, stat: str = "typ", calib: dict | None = None) -> None:
+    """계획 무게 결정. calib = {재질코드: 배수} 는 우리 추정값에만 곱한다 (실측 보정)."""
     for o in objs:
         if source == "company" and o.company_kg is not None:
             o._plan_kg = o.company_kg
         else:
-            o._plan_kg = {"min": o.kg_min, "max": o.kg_max}.get(stat, o.kg_typ)
+            o._plan_kg = {"min": o.kg_min, "max": o.kg_max}.get(stat, o.kg_typ) * float((calib or {}).get(o.code, 1.0))
         # 대표값이 23 kg 를 넘거나, 큰 물체(3 m² 이상) 인데 최대값이 23 kg 를 넘으면 2인 운반 대상
         o.heavy = o.plan_kg > NIOSH_LIFT_LIMIT_KG or (o.area_m2 >= 3.0 and o.kg_max > NIOSH_LIFT_LIMIT_KG)
 
@@ -320,6 +324,7 @@ class Zone:
     cum_bags: int
     returns: int = 0                             # 들고 이동 모드에서 출발지 복귀 횟수
     day: int = 1
+    team: int = 1
 
 
 @dataclass
@@ -337,6 +342,7 @@ class CollectPlan:
     total_work_min: float
     total_min: float
     days: list[dict]
+    teams: list[dict]
     equipment: list[str]
     by_code: dict[str, dict]
     params: dict
@@ -366,7 +372,7 @@ def make_collect_plan(objs_all: list[LitterObject], params: CollectParams | None
     to_m = Transformer.from_crs("EPSG:4326", crs_m, always_xy=True)
     to_ll = Transformer.from_crs(crs_m, "EPSG:4326", always_xy=True)
 
-    set_weight_source(objs_all, p.weight_source, p.weight_stat)
+    set_weight_source(objs_all, p.weight_source, p.weight_stat, p.calib)
     for o in objs_all:
         o.included = (p.include_codes is None or o.code in p.include_codes) and o.plan_kg >= p.min_kg
         o.zone, o.order = -1, 0
@@ -445,94 +451,132 @@ def make_collect_plan(objs_all: list[LitterObject], params: CollectParams | None
         d = compass_name(cents[z][0] - center_xy[0], cents[z][1] - center_xy[1]); seen[d] = seen.get(d, 0) + 1
         names[z] = f"{d}쪽 해안" + (f" {circ[seen[d] - 1]}" if dir_count[d] > 1 and seen[d] - 1 < len(circ) else "")
 
-    # 순회 실행 (적재량·복귀 포함)
+    # 순회 실행 (적재량·복귀 포함) — 한 팀이 seq 순서로 구역을 도는 함수
     cap_kg = p.workers * p.carry_kg_per_person
     cap_bags = p.workers * p.carry_bags_per_person
-    zones: list[Zone] = []
-    pos, cum_min, cum_bags, route_len = 0, 0.0, 0, 0.0
-    load_kg, load_bags = 0.0, 0.0
     route_pts: list[tuple[float, float]] = [depot_xy]
 
-    def speed_factor():
-        return 1.0 - min(0.4, p.load_slow * load_kg / max(p.workers, 1))
+    def traverse(seq: list[int], start_step: int, team: int) -> tuple[list[Zone], float, float]:
+        """반환 (zones, 복귀 환산 m, 복귀 분). 출발지에서 시작해 seq 구역을 차례로 돈다."""
+        zs: list[Zone] = []
+        pos, cum_min, cum_bags = 0, 0.0, 0
+        load = {"kg": 0.0, "bags": 0.0}
 
-    for step, z in enumerate(ordered, 1):
-        members = groups[z][:]
-        inner = []
-        cur = pos
-        while members:
-            nxt = min(members, key=lambda i: D[cur, i]); inner.append(nxt); members.remove(nxt); cur = nxt
-        for k, i in enumerate(inner, 1):
-            objs[i - 1].order = k
-        d_in = D[pos, inner[0]]
-        segs: list[list[tuple[float, float]]] = []
-        walk_min = 0.0; dist_total = 0.0; returns = 0
-        cur = pos
-        for i in inner:
-            o = objs[i - 1]
-            o_bags = _bags(o.plan_kg, o.volume_m3, p.bag)[0]
-            if p.carry == "carry" and (load_kg > 0 or load_bags > 0) and (load_kg + o.plan_kg > cap_kg or load_bags + o_bags > cap_bags):
-                back = D[cur, 0]; out = D[0, i]
-                walk_min += back * walk_min_per_m / speed_factor()
-                load_kg, load_bags = 0.0, 0.0
-                walk_min += out * walk_min_per_m / speed_factor()
-                dist_total += back + out
-                segs.append(seg(cur, 0)); segs.append(seg(0, i)); returns += 1
-            else:
-                d = D[cur, i]
-                walk_min += d * walk_min_per_m / speed_factor(); dist_total += d
-                segs.append(seg(cur, i))
-            if p.carry == "carry":
-                load_kg += o.plan_kg; load_bags += o_bags
-            cur = i
-        pos = cur
-        L = [objs[i - 1] for i in inner]
-        kg_plan = sum(o.plan_kg for o in L); m3 = sum(o.volume_m3 for o in L)
-        bags, lim = _bags(kg_plan, m3, p.bag)
-        heavy = [o.obj_id for o in L if o.heavy]
-        work_min = zone_work[z]
-        cum_min += walk_min + work_min; cum_bags += bags; route_len += dist_total
-        by_code: dict[str, int] = {}
-        for o in L:
-            by_code[o.code] = by_code.get(o.code, 0) + 1
-        tools = sorted({material(c).tool for c in by_code if material(c).tool})
-        notes = []
-        if heavy:
-            notes.append(f"무거운 물체 {len(heavy)}개 → 2인 이상 또는 장비 (NIOSH 23 kg 초과 가능)")
-        big = [o for o in L if o.area_m2 >= 3.0]
-        if big:
-            notes.append(f"면적 3 m² 이상 큰 물체 {len(big)}개 (" + ", ".join(f"{o.class_ko} {o.area_m2:.1f} m²" for o in big) + ")")
-        if returns:
-            notes.append(f"적재량 초과로 출발지 복귀 {returns}회 포함")
-        path_xy = [q for s in segs for q in s]
-        route_pts += path_xy[1:] if path_xy else []
-        lon, lat = to_ll.transform(*cents[z])
-        zones.append(Zone(zone_id=z, step=step, name=names[z], cx_m=cents[z][0], cy_m=cents[z][1], lon=lon, lat=lat,
-                          objects=[o.obj_id for o in L], n=len(L), by_code=by_code, kg_plan=kg_plan,
-                          kg_min=sum(o.kg_min for o in L), kg_typ=sum(o.kg_typ for o in L), kg_max=sum(o.kg_max for o in L),
-                          company_kg=sum(o.company_kg or 0 for o in L), volume_m3=m3, bags=bags, bag_limit=lim,
-                          heavy_ids=heavy, tools=tools, notes=notes,
-                          path_lonlat=[to_ll.transform(x, y) for x, y in path_xy], dist_from_prev_m=float(d_in),
-                          dist_total_m=float(dist_total), walk_min=walk_min, work_min=work_min, cum_min=cum_min,
-                          cum_bags=cum_bags, returns=returns))
-    back_m, back_min = 0.0, 0.0
-    if p.round_trip and zones:
-        back_m = float(D[pos, 0]); back_min = back_m * walk_min_per_m / speed_factor(); route_len += back_m
-        route_pts += seg(pos, 0)[1:]
-    total_walk = sum(z.walk_min for z in zones) + back_min
-    total_work = sum(z.work_min for z in zones)
-    total_min = total_walk + total_work
+        def speed_factor():
+            return 1.0 - min(0.4, p.load_slow * load["kg"] / max(p.workers, 1))
 
-    # 일차
+        for k0, z in enumerate(seq):
+            step = start_step + k0
+            members = groups[z][:]
+            inner = []
+            cur = pos
+            while members:
+                nxt = min(members, key=lambda i: D[cur, i]); inner.append(nxt); members.remove(nxt); cur = nxt
+            for k, i in enumerate(inner, 1):
+                objs[i - 1].order = k
+            d_in = D[pos, inner[0]]
+            segs: list[list[tuple[float, float]]] = []
+            walk_min = 0.0; dist_total = 0.0; returns = 0
+            cur = pos
+            for i in inner:
+                o = objs[i - 1]
+                o_bags = _bags(o.plan_kg, o.volume_m3, p.bag)[0]
+                if p.carry == "carry" and (load["kg"] > 0 or load["bags"] > 0) and (load["kg"] + o.plan_kg > cap_kg or load["bags"] + o_bags > cap_bags):
+                    back = D[cur, 0]; out = D[0, i]
+                    walk_min += back * walk_min_per_m / speed_factor()
+                    load["kg"], load["bags"] = 0.0, 0.0
+                    walk_min += out * walk_min_per_m / speed_factor()
+                    dist_total += back + out
+                    segs.append(seg(cur, 0)); segs.append(seg(0, i)); returns += 1
+                else:
+                    d = D[cur, i]
+                    walk_min += d * walk_min_per_m / speed_factor(); dist_total += d
+                    segs.append(seg(cur, i))
+                if p.carry == "carry":
+                    load["kg"] += o.plan_kg; load["bags"] += o_bags
+                cur = i
+            pos = cur
+            L = [objs[i - 1] for i in inner]
+            kg_plan = sum(o.plan_kg for o in L); m3 = sum(o.volume_m3 for o in L)
+            bags, lim = _bags(kg_plan, m3, p.bag)
+            heavy = [o.obj_id for o in L if o.heavy]
+            work_min = zone_work[z]
+            cum_min += walk_min + work_min; cum_bags += bags
+            by_code: dict[str, int] = {}
+            for o in L:
+                by_code[o.code] = by_code.get(o.code, 0) + 1
+            tools = sorted({material(c).tool for c in by_code if material(c).tool})
+            notes = []
+            if heavy:
+                notes.append(f"무거운 물체 {len(heavy)}개 → 2인 이상 또는 장비 (NIOSH 23 kg 초과 가능)")
+            big = [o for o in L if o.area_m2 >= 3.0]
+            if big:
+                notes.append(f"면적 3 m² 이상 큰 물체 {len(big)}개 (" + ", ".join(f"{o.class_ko} {o.area_m2:.1f} m²" for o in big) + ")")
+            if returns:
+                notes.append(f"적재량 초과로 출발지 복귀 {returns}회 포함")
+            path_xy = [q for sg in segs for q in sg]
+            route_pts.extend(path_xy[1:] if path_xy else [])
+            lon, lat = to_ll.transform(*cents[z])
+            zs.append(Zone(zone_id=z, step=step, name=names[z], cx_m=cents[z][0], cy_m=cents[z][1], lon=lon, lat=lat,
+                           objects=[o.obj_id for o in L], n=len(L), by_code=by_code, kg_plan=kg_plan,
+                           kg_min=sum(o.kg_min for o in L), kg_typ=sum(o.kg_typ for o in L), kg_max=sum(o.kg_max for o in L),
+                           company_kg=sum(o.company_kg or 0 for o in L), volume_m3=m3, bags=bags, bag_limit=lim,
+                           heavy_ids=heavy, tools=tools, notes=notes,
+                           path_lonlat=[to_ll.transform(x, y) for x, y in path_xy], dist_from_prev_m=float(d_in),
+                           dist_total_m=float(dist_total), walk_min=walk_min, work_min=work_min, cum_min=cum_min,
+                           cum_bags=cum_bags, returns=returns, team=team))
+        back_m, back_min = 0.0, 0.0
+        if p.round_trip and zs:
+            back_m = float(D[pos, 0]); back_min = back_m * walk_min_per_m / speed_factor()
+            route_pts.extend(seg(pos, 0)[1:])
+        return zs, back_m, back_min
+
+    # 팀 분할: 한 팀 순회 결과를 시간 균형으로 연속 구간 T개로 나눔 (각 팀은 출발지에서 자기 구간만)
+    n_teams = max(int(p.teams), 1)
+    if n_teams > 1 and len(ordered) > 1:
+        single, _, _ = traverse(ordered, 1, 1)
+        route_pts[:] = [depot_xy]
+        tot = sum(z.walk_min + z.work_min for z in single)
+        segments: list[list[int]] = []; cur_seg: list[int] = []; cum = 0.0
+        for k, z in enumerate(single):
+            cur_seg.append(ordered[k]); cum += z.walk_min + z.work_min
+            remaining = len(single) - k - 1
+            # 누적 시간이 (팀 번호 × 팀당 목표) 를 넘으면 경계 (전체 누적 기준이라 뒤 팀이 쪼그라들지 않음)
+            teams_left = n_teams - len(segments) - 1          # 아직 구역을 못 받은 뒤 팀 수
+            if len(segments) < n_teams - 1 and remaining >= teams_left and (cum >= (len(segments) + 1) * tot / n_teams or remaining == teams_left):
+                segments.append(cur_seg); cur_seg = []
+        if cur_seg:
+            segments.append(cur_seg)
+    else:
+        segments = [ordered] if ordered else []
+
+    zones: list[Zone] = []
+    team_info: list[dict] = []
+    days: list[dict] = []
+    route_len = 0.0; total_walk = 0.0; total_work = 0.0
     day_cap = p.hours_per_day * 60
-    day, acc, days = 1, 0.0, []
-    for z in zones:
-        if acc > 0 and acc + z.walk_min + z.work_min > day_cap:
-            days.append({"day": day, "steps": [zz.step for zz in zones if zz.day == day], "minutes": round(acc, 1)})
-            day, acc = day + 1, 0.0
-        z.day = day; acc += z.walk_min + z.work_min
-    if zones:
-        days.append({"day": day, "steps": [zz.step for zz in zones if zz.day == day], "minutes": round(acc + back_min, 1)})
+    step0 = 1
+    for t, seq in enumerate(segments, 1):
+        zs, back_m, back_min = traverse(seq, step0, t)
+        step0 += len(zs)
+        walk = sum(z.walk_min for z in zs) + back_min; work = sum(z.work_min for z in zs)
+        route_len += sum(z.dist_total_m for z in zs) + back_m
+        total_walk += walk; total_work += work
+        # 일차 (팀별)
+        day, acc = 1, 0.0
+        for z in zs:
+            if acc > 0 and acc + z.walk_min + z.work_min > day_cap:
+                days.append({"team": t, "day": day, "steps": [zz.step for zz in zs if zz.day == day and zz.team == t], "minutes": round(acc, 1)})
+                day, acc = day + 1, 0.0
+            z.day = day; acc += z.walk_min + z.work_min
+        if zs:
+            days.append({"team": t, "day": day, "steps": [zz.step for zz in zs if zz.day == day], "minutes": round(acc + back_min, 1)})
+        team_info.append({"team": t, "zones": [z.step for z in zs], "n": sum(z.n for z in zs), "kg": sum(z.kg_plan for z in zs),
+                          "bags": sum(z.bags for z in zs), "walk_min": walk, "work_min": work, "minutes": walk + work,
+                          "days": day if zs else 0, "route_m": sum(z.dist_total_m for z in zs) + back_m})
+        zones.extend(zs)
+    total_min = max((ti["minutes"] for ti in team_info), default=0.0)     # 팀이 동시에 일하므로 가장 오래 걸리는 팀 기준
+    back_min = 0.0
 
     kg_plan = sum(o.plan_kg for o in objs)
     vol = sum(o.volume_m3 for o in objs)
@@ -541,7 +585,7 @@ def make_collect_plan(objs_all: list[LitterObject], params: CollectParams | None
         "kg_max": sum(o.kg_max for o in objs), "company_kg": sum(o.company_kg or 0 for o in objs),
         "volume_m3": vol, "area_m2": sum(o.area_m2 for o in objs),
         "bags": sum(z.bags for z in zones), "heavy": sum(len(z.heavy_ids) for z in zones), "zones": len(zones),
-        "returns": sum(z.returns for z in zones),
+        "returns": sum(z.returns for z in zones), "teams": len(team_info), "work_min_sum": total_walk + total_work,
         "tonbags": math.ceil(max(kg_plan / p.bag.tonbag_kg, vol * p.bag.bulk_factor / p.bag.tonbag_m3)) if objs else 0,
     }
     by_code: dict[str, dict] = {}
@@ -575,13 +619,14 @@ def make_collect_plan(objs_all: list[LitterObject], params: CollectParams | None
         "들고 이동 모드: 팀 적재량(인원 × 1인 kg·마대 수) 을 넘으면 출발지에 내려놓고 돌아옴 (가정값)",
         "1인 들기 한계 23 kg 는 NIOSH Revised Lifting Equation",
         "검출 누락은 반영하지 않은 최소 추정치 (현장에서 라벨에 없는 쓰레기도 함께 수거)",
-    ]
+    ] + (["여러 팀: 한 팀 순회를 시간 균형으로 연속 구간으로 나눠 각 팀이 출발지에서 자기 구간만 돈다. 총 시간은 가장 오래 걸리는 팀 기준"] if n_teams > 1 else []) \
+      + ([f"실측 보정 계수 적용: " + ", ".join(f"{material(c).ko} ×{v:.2f}" for c, v in (p.calib or {}).items())] if p.calib else [])
     return CollectPlan(
         site=site, survey_date=", ".join(survey),
         depot={"lon": depot_ll[0], "lat": depot_ll[1], "x_m": depot_xy[0], "y_m": depot_xy[1], "name": p.depot_name},
         n_objects=len(objs), n_skipped=len(objs_all) - len(objs), totals=totals, zones=zones,
         route_lonlat=[to_ll.transform(x, y) for x, y in route_pts], route_len_m=route_len, total_walk_min=total_walk,
-        total_work_min=total_work, total_min=total_min, days=days, equipment=equipment, by_code=by_code,
+        total_work_min=total_work, total_min=total_min, days=days, teams=team_info, equipment=equipment, by_code=by_code,
         params=p.to_dict(), terrain_used=terrain is not None, assumptions=assumptions, objects=objs_all)
 
 
@@ -593,9 +638,9 @@ def save_plan_files(plan: CollectPlan, out_dir: str | Path) -> dict[str, Path]:
     (out / "plan.json").write_text(json.dumps(plan.to_dict(), ensure_ascii=False, indent=2, default=float), encoding="utf-8")
     files["plan.json"] = out / "plan.json"
 
-    zone_cols = ["step", "day", "name", "n", "kg_plan", "kg_min", "kg_max", "company_kg", "volume_m3", "bags",
+    zone_cols = ["step", "team", "day", "name", "n", "kg_plan", "kg_min", "kg_max", "company_kg", "volume_m3", "bags",
                  "dist_from_prev_m", "dist_total_m", "walk_min", "work_min", "cum_min", "cum_bags", "returns", "lon", "lat", "tools", "notes"]
-    zone_ko = ["순서", "일차", "구역", "개수", "계획 무게(kg)", "최소(kg)", "최대(kg)", "기업값(kg)", "부피(m³)", "마대(장)",
+    zone_ko = ["순서", "팀", "일차", "구역", "개수", "계획 무게(kg)", "최소(kg)", "최대(kg)", "기업값(kg)", "부피(m³)", "마대(장)",
                "접근(m)", "구역 이동 합(m)", "이동(분)", "작업(분)", "누적(분)", "누적 마대", "복귀 횟수", "경도", "위도", "도구", "주의"]
     obj_cols = ["step", "order", "obj_id", "class_ko", "included", "area_m2", "w_m", "h_m", "plan_kg", "kg_min", "kg_typ", "kg_max",
                 "company_kg", "volume_m3", "heavy", "lon", "lat", "image_path"]
@@ -627,7 +672,7 @@ def save_plan_files(plan: CollectPlan, out_dir: str | Path) -> dict[str, Path]:
                 ["제외(종류·무게 필터)", plan.n_skipped], ["구역 수", t["zones"]], ["계획 무게(kg)", round(t["kg_plan"], 1)],
                 ["무게 범위(kg)", f"{t['kg_min']:.1f} – {t['kg_max']:.1f}"], ["기업 제공 무게 합(kg)", round(t["company_kg"], 3)],
                 ["부피(m³)", round(t["volume_m3"], 2)], ["마대(장)", t["bags"]], ["이동 거리(걷기 환산 m)", round(plan.route_len_m)],
-                ["총 시간(분)", round(plan.total_min)], ["일수", len(plan.days)], ["인원", plan.params["workers"]],
+                ["총 시간(분, 가장 오래 걸리는 팀)", round(plan.total_min)], ["팀 수", len(plan.teams)], ["일수(최대)", max((t["days"] for t in plan.teams), default=0)], ["인원(팀당)", plan.params["workers"]],
                 ["이동 방식", plan.params["travel"]], ["운반 방식", plan.params["carry"]], ["최적화 목표", plan.params["objective"]],
                 ["지형 반영", "예" if plan.terrain_used else "아니오(직선×우회)"]]
         for r in rows:
@@ -655,11 +700,12 @@ def summary_markdown(plan: CollectPlan) -> str:
          f"- 계획 무게 **{t['kg_plan']:.1f} kg** (추정 범위 {t['kg_min']:.1f} – {t['kg_max']:.1f} kg, 기업 제공값 합 {t['company_kg']:.3f} kg)",
          f"- 부피 {t['volume_m3']:.2f} m³ → 마대 {t['bags']}장, 무거운 물체 {t['heavy']}개",
          f"- 이동 {plan.route_len_m / 1000:.1f} km (걷기 환산, {'지형 반영' if plan.terrain_used else '직선×우회'}, {plan.params['travel']}/{plan.params['carry']}) · "
-         f"이동 {plan.total_walk_min:.0f}분 + 작업 {plan.total_work_min:.0f}분 = 총 {plan.total_min / 60:.1f}시간 ({plan.params['workers']}명) → {len(plan.days)}일",
-         "", "## 작업 순서", "", "| 순서 | 일차 | 구역 | 개수 | 구성 | 무게(kg) | 마대 | 접근 | 이동 합 | 작업 | 주의 |", "|---|---|---|---|---|---|---|---|---|---|---|"]
+         f"이동 {plan.total_walk_min:.0f}분 + 작업 {plan.total_work_min:.0f}분 (전 팀 합) · 가장 오래 걸리는 팀 {plan.total_min / 60:.1f}시간 "
+         f"({len(plan.teams)}팀 × {plan.params['workers']}명) → 최대 {max((t['days'] for t in plan.teams), default=0)}일",
+         "", "## 작업 순서", "", "| 순서 | 팀 | 일차 | 구역 | 개수 | 구성 | 무게(kg) | 마대 | 접근 | 이동 합 | 작업 | 주의 |", "|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for z in plan.zones:
         comp = ", ".join(f"{material(c).ko} {n}" for c, n in sorted(z.by_code.items(), key=lambda kv: -kv[1]))
-        L.append(f"| {z.step} | {z.day} | {z.name} | {z.n} | {comp} | {z.kg_plan:.1f} ({z.kg_min:.1f}–{z.kg_max:.1f}) | {z.bags} | "
+        L.append(f"| {z.step} | {z.team} | {z.day} | {z.name} | {z.n} | {comp} | {z.kg_plan:.1f} ({z.kg_min:.1f}–{z.kg_max:.1f}) | {z.bags} | "
                  f"{z.dist_from_prev_m:.0f} m | {z.dist_total_m:.0f} m / {z.walk_min:.0f}분 | {z.work_min:.0f}분 | {' / '.join(z.notes) or '-'} |")
     L += ["", "## 준비물", ""] + [f"- {e}" for e in plan.equipment]
     L += ["", "## 재질별", "", "| 재질 | 개수 | 면적(m²) | 계획 무게(kg) | 범위(kg) | 기업값(kg) |", "|---|---|---|---|---|---|"]
