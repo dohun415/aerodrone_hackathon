@@ -12,7 +12,8 @@ import json
 from collections import defaultdict
 from pathlib import Path
 
-LABEL_PATH = Path("7_2 (1)/MGD_쓰레기.json")
+ROOT = Path(__file__).resolve().parents[1]
+LABEL_PATH = ROOT / "data/company/MGD_labels.json"
 
 
 def load_features():
@@ -52,7 +53,7 @@ def main():
         "이 과제의 핵심 논거가 된다. (노션 문서 Andriolo 2024 W3 비판과 정확히 일치)"
     )
 
-    out = Path("results")
+    out = ROOT / "results"
     out.mkdir(exist_ok=True)
     (out / "label_analysis.json").write_text(json.dumps(report, ensure_ascii=False, indent=2))
     print("\n저장: results/label_analysis.json")

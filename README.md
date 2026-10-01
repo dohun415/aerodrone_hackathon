@@ -20,28 +20,36 @@
 
 ## 폴더 구성과 출처
 
+```
+path_planning/        ①② 핫스팟 우선 경로 + 커버리지 경로
+hotspot/              ①  밀집 구간 근거 실험
+litter/               ③  탐지·위치·3D·무게 + 정량 시뮬레이터     (coastal 브랜치 원본)
+shoresweep_planner/   ④  수거계획 대시보드                     (shoresweep 브랜치 원본)
+ros_sim/              검증: 경로를 PX4 SITL로 비행
+docs/                 인수인계·결과 문서, 발표 그림              (coastal 브랜치 원본)
+scripts/              기업 라벨 분석
+data/company/         기업 1차 데이터 (git 제외)
+```
+
 | 폴더 | 역할 | 출처 |
 |---|---|---|
 | `path_planning/` | ① 핫스팟 우선 경로(오리엔티어링), ② 커버리지 경로 | 이 레포 |
 | `hotspot/` | 밀집 구간이 실제로 존재하고 시간이 지나도 유지되는지 검증 (하와이 항공조사, NOAA MDMAP) | 이 레포 |
 | `litter/` | ③ 탐지·위치·3D 부피·무게 8단계 파이프라인 + 정량 시뮬레이터 | `origin/feature/coastal-litter-pipeline` |
-| `docs/` | 인수인계·결과정리·방향정리 문서, 발표 그림 | `origin/feature/coastal-litter-pipeline` |
 | `shoresweep_planner/` | ④ 수거계획 인터랙티브 대시보드 (지형 최단경로 포함) | `origin/feature/shoresweep-planner` |
 | `ros_sim/` | 경로가 실제 비행 컨트롤러로 날 수 있는지 PX4 SITL로 확인 | 이 레포 |
-| `analyze_labels.py` | 기업 라벨의 `weight_kg`가 면적×고정계수임을 확인 | 이 레포 |
-| `archive/` | 이번 방향에서 쓰지 않는 이전 작업 (삭제하지 않고 보관) | 이 레포 |
+| `docs/` | 인수인계·결과정리·방향정리 문서, 발표 그림 | `origin/feature/coastal-litter-pipeline` |
+| `scripts/analyze_labels.py` | 기업 라벨의 `weight_kg`가 면적×고정계수임을 확인 | 이 레포 |
+| `data/company/` | 기업 1차 데이터(문갑도). **git 제외** — 팀 공유 폴더에서 받아 둔다 | 기업 제공 |
 
 `litter/`, `docs/`, `shoresweep_planner/`는 각 브랜치의 파일을 **구조·내용 그대로**
 가져온 것이다(포크 아님). 수정이 필요하면 원 브랜치에서 고치고 다시 가져온다.
 예외로 `docs/핫스팟_우선경로_발표정리.md`는 브랜치에 없는 이 레포 쪽 문서다.
 
-### `archive/`에 둔 것과 이유
+### 범위에서 뺀 이전 작업
 
-| 항목 | 이유 |
-|---|---|
-| `phone_bridge/` | 웹 클릭 → 폰 탭 브릿지. 실시간 조종을 접어서 보류 |
-| `volume3d_synthetic/` | 합성 상자로 한 3D 부피 검증. 실제 영상 기반 `litter/objvol.py`가 대체 |
-| `path_planning_v1/` | 비행 중 물체를 만나면 이탈해 선회하는 경로(`orbit.py`)와 그 통합 미션. 2차 비행·선회 논의를 범위에서 제외해 보관. `ros_sim/`이 쓴 `mission.json`도 여기 있음 |
+비행 중 이탈·선회 경로(2차 비행), 웹 클릭 → 폰 탭 브릿지, 합성 상자 3D 부피 검증은
+이번 방향에서 제외해 삭제했다. 필요하면 커밋 `cffc25f`의 `archive/`에서 꺼낼 수 있다.
 
 ## 실행
 
@@ -70,14 +78,17 @@ GPU·학습 가중치·원본 영상이 필요한 단계(YOLO 학습, COLMAP 조
   - 무게 물체오차 중앙값: 개수×14g 96% → 학습 2D+3D **30%**, ≥23 kg 탐지 100%
 - `hotspot_route` 동작 확인 (임의 40구간, 전체 순회의 30% 예산으로 가치 27% 방문)
 
-## 선행 데이터 분석 (문갑도 1차 데이터, `7_2 (1)/`)
+## 선행 데이터 분석 (문갑도 1차 데이터)
 
-| 파일 | 내용 |
+배치는 `litter/`(인수인계 문서 2장)가 기대하는 경로를 따른다.
+
+| 경로 | 내용 |
 |---|---|
-| `정사영상/7_2_문갑도.ecw` | 정사영상 771 MB, 3.02 cm/px. 이 맥 환경에선 못 열었고, coastal 브랜치에서 Windows QGIS GDAL로 GeoTIFF 변환에 성공함 (인수인계 문서 2장) |
-| `MGD_쓰레기.json` | GeoJSON 42건 — 재질·면적·`weight_kg` |
+| `data/company/MGD_labels.json` | GeoJSON 42건 — 재질·면적·`weight_kg` (원본 이름 `MGD_쓰레기.json`) |
+| `data/company/ortho/7_2_문갑도.ecw` | 정사영상 771 MB, 3.02 cm/px. 이 맥 환경에선 못 열었고, coastal 브랜치에서 Windows QGIS GDAL로 `MGD.tif` 변환에 성공함 |
+| `data/company/crops/` | 쓰레기 1건당 크롭 42장 |
 
-**`weight_kg`는 실측이 아니라 면적 × 재질별 고정계수다** (`analyze_labels.py`).
+**`weight_kg`는 실측이 아니라 면적 × 재질별 고정계수다** (`scripts/analyze_labels.py`).
 
 | 재질 | 개수 | weight/area (kg/m²) | 분산 |
 |---|---|---|---|
@@ -89,9 +100,9 @@ GPU·학습 가중치·원본 영상이 필요한 단계(YOLO 학습, COLMAP 조
 이 값으로 수거계획을 짜면 문갑도 42건이 **1.3 kg**, 겉보기밀도로 계산하면
 **101 kg**이 나온다 (`shoresweep_planner/README.md`). 이게 이 프로젝트의 출발점이다.
 
-또 `crops/`는 정사영상 한 장에서 자른 패치라 시차가 없어서 이 데이터만으로는
+또 크롭은 정사영상 한 장에서 자른 패치라 시차가 없어서 이 데이터만으로는
 3D 복원이 안 된다. 3D 부피는 자체 드론 영상(송도 0007·0010)으로 검증했다.
 
 ```bash
-python3 analyze_labels.py
+python3 scripts/analyze_labels.py
 ```

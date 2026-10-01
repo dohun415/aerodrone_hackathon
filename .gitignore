@@ -5,9 +5,6 @@ __pycache__/
 *.ecw
 *.ecw.aux.xml
 results/*.json
-archive/phone_bridge/.venv/
-archive/volume3d_synthetic/.venv/
-archive/volume3d_synthetic/data/*/colmap/database.db
 ros_sim/out/
 hotspot/data/
 
@@ -25,4 +22,3 @@ tools/
 
 # shoresweep_planner 산출물
 shoresweep_planner/outputs/
-archive/volume3d_synthetic/data/
