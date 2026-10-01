@@ -23,5 +23,5 @@ tools/
 # shoresweep_planner 산출물
 shoresweep_planner/outputs/
 
-ros_sim/out_hawaii/
+ros_sim/out_hawaii*/
 ros_sim/hawaii/generated/
