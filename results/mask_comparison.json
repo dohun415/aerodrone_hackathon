@@ -1,7 +1,0 @@
-{
-  "date": "2026-09-16",
-  "ndwi_water_pct": 98.79,
-  "rgb_only_water_pct": 32.77,
-  "iou_rgb_vs_ndwi": 0.3317,
-  "note": "실제 SkySat(회사 데이터)은 RGB뿐이라 rgb_only 방법을 써야 함. 이 IoU가 낮을수록 마스킹 단계의 오차가 뒤 단계(정합·변화탐지)에 전파될 위험이 큼."
-}
