@@ -261,7 +261,14 @@ header{padding:8px 0 4px}header h1{font-size:28px;margin:0 0 4px;font-weight:800
 .tile .lab{font-size:13px;color:var(--ink2)}.tile .val{font-size:27px;font-weight:800;line-height:1.15;letter-spacing:-.01em;white-space:nowrap}.tile .sub{font-size:12px;color:var(--muted)}
 .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;margin:14px 0}
 .card h2{font-size:20px;margin:0 0 4px;font-weight:800}.card .sub{color:var(--ink2);font-size:14px;margin:0 0 10px}
-.panel{position:sticky;top:0;z-index:500;background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 16px;margin:12px 0;box-shadow:0 4px 20px rgba(0,0,0,.08)}
+.panel{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:12px 16px;margin:12px 0}
+.layout{display:block}.side{display:block}.main{min-width:0}
+.fold{font:inherit;font-size:13px;padding:4px 10px;border-radius:999px;border:1px solid var(--border);background:var(--bg);color:var(--ink2);cursor:pointer;margin-left:8px}
+.side-open{display:none;font:inherit;font-size:14px;padding:8px 10px;border-radius:12px;border:1px solid var(--border);background:var(--card);color:var(--ink);cursor:pointer;writing-mode:vertical-rl;letter-spacing:.1em}
+@media (min-width:1000px){.wrap{max-width:1500px}.layout{display:grid;grid-template-columns:330px minmax(0,1fr);gap:16px;align-items:start}
+ .side{position:sticky;top:env(safe-area-inset-top,0px);max-height:100vh;overflow:auto;padding-bottom:12px}.side .panel{margin:12px 0 0}
+ .side .ctrl{grid-template-columns:1fr 1fr}.side .codes label{padding:3px 8px;font-size:13px}.side .btns button{font-size:13px;padding:5px 9px}
+ .layout.collapsed{grid-template-columns:48px minmax(0,1fr)}.layout.collapsed .panel{display:none}.layout.collapsed .side-open{display:block;margin-top:12px}}
 .panel h2{font-size:17px;margin:0 0 8px;font-weight:800;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px}
 .ctrl{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:10px 14px}
 .ctrl label{display:flex;flex-direction:column;font-size:13px;color:var(--ink2);gap:3px}
@@ -622,6 +629,8 @@ window.downloadJson=()=>{ if(!CUR)return; const out={params:P, depot, options:CU
 document.querySelectorAll('.ctrl input, .ctrl select').forEach(el=>el.addEventListener('input',scheduleRecompute));
 document.querySelectorAll('.seg button').forEach(b=>b.addEventListener('click',()=>{ setSeg(b.parentElement.dataset.name,b.dataset.v); recompute(); }));
 for (const [c,v] of Object.entries(ST.calib)) { const el=$('#c-cal-'+c); if (el) el.value=v; }
+window.toggleSide=()=>{ const l=$('#layout'); l.classList.toggle('collapsed'); try{ localStorage.setItem(LS_KEY+':side', l.classList.contains('collapsed')?'1':'0'); }catch(e){} setTimeout(()=>{ if(map){ map.invalidateSize(); } },250); };
+try{ if(localStorage.getItem(LS_KEY+':side')==='1') $('#layout').classList.add('collapsed'); }catch(e){}
 initMap(); recompute();
 })();
 """
@@ -638,7 +647,7 @@ def _control_panel(d: dict, mats: dict, terrain: bool, present_codes: list[str],
                   for c in present_codes)
     travel_opts = [("walk", "도보"), ("boat", "보트 지원")] if terrain else [("walk", "도보 (지형 없음)")]
     return f"""
-<div class="panel"><h2><span>조건 바꾸기 → 바로 다시 계산</span><span id="status">…</span></h2>
+<div class="panel"><h2><span>조건 바꾸기 → 바로 다시 계산</span><span><span id="status">…</span><button class="fold" onclick="toggleSide()" title="설정 접기">◀ 접기</button></span></h2>
 <div class="ctrl">
  <label><b>팀당 인원</b><input type="number" id="c-workers" min="1" max="30" step="1" value="{d['workers']}"></label>
  <label><b>팀 수 (동시 투입)</b><input type="number" id="c-teams" min="1" max="6" step="1" value="{d['teams']}"></label>
@@ -751,7 +760,7 @@ def build_collect_html(plan: CollectPlan, out_html: str | Path, *, photos_dir: s
 
     H = [head + f"""
 <header><h1>{_esc(title)}</h1><p>조사일 {_esc(plan.survey_date)} · 출발·집결지 <b>{_esc(plan.depot['name'])}</b> (지도의 ★ 를 끌어서 바꿀 수 있음) · {'지형(물·숲·맨땅) 최단경로 반영' if terrain is not None else '직선 거리 × 우회 배수'}</p></header>""",
-         _control_panel(defaults, mats, terrain is not None, present_codes, artifact),
+         '<div class="layout" id="layout"><aside class="side"><button class="side-open" onclick="toggleSide()">설정 열기 ▶</button>' + _control_panel(defaults, mats, terrain is not None, present_codes, artifact) + '</aside><main class="main">',
          '<div class="tiles" id="tiles"></div>',
          '<div class="card"><h2>수거 지도</h2><p class="sub" id="maphint">번호 순서대로 이동합니다. 번호나 아래 카드를 누르면 그 구역으로 확대되고, 점을 누르면 사진과 무게가 나옵니다. ★ 출발지는 끌어서 옮기면 경로가 다시 계산됩니다.</p>',
          '<div class="mapbtns" id="daybtns"></div>',
@@ -764,7 +773,7 @@ def build_collect_html(plan: CollectPlan, out_html: str | Path, *, photos_dir: s
          '<div class="card"><details><summary>전체 쓰레기 목록 (수거 순서)</summary><div style="overflow:auto;max-height:520px"><table><thead><tr><th>순서</th><th>ID</th><th>종류</th><th class="num">가로×세로 m</th><th class="num">면적 m²</th><th class="num">예상 kg</th><th class="num">범위</th><th class="num">기업 kg</th><th>비고</th></tr></thead><tbody id="objtab"></tbody></table></div></details></div>',
          '<div class="card"><h2>이 숫자는 어떻게 나왔나 (가정과 한계)</h2><ul class="note">' + "".join(f"<li>{_esc(a)}</li>" for a in plan.assumptions) +
          f'<li>무게 계산식 예: {_esc(plan.objects[0].note) if plan.objects else ""}</li><li id="assume-params"></li></ul></div>',
-         '<p class="foot">드론대장 붕붕이 · litter3d collect · 파일: plan.json, zones.csv, objects.csv, 수거계획.xlsx, 수거계획_지도.png (기본 설정 기준)</p></div>',
+         '</main></div><p class="foot">드론대장 붕붕이 · litter3d collect · 파일: plan.json, zones.csv, objects.csv, 수거계획.xlsx, 수거계획_지도.png (기본 설정 기준)</p></div>',
          f'<script>window.PLAN={json.dumps(data, ensure_ascii=False)};</script><script>{JS_APP}</script>' + tail]
     out = Path(out_html); out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text("\n".join(H), encoding="utf-8")
