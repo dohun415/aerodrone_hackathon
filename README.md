@@ -14,14 +14,16 @@
 | `crops/*.jpg` (42장) | 쓰레기 1건당 1장, **정사영상에서 바로 잘라낸 top-down 패치** (별도 측면·경사 촬영 아님, 15~253px 소형 이미지) |
 | `MGD_쓰레기.json` | GeoJSON. 42 feature — 폴리곤 지오메트리 + `material_code`(재질) · `area_sqm`(면적) · `weight_kg`(무게) · `center_lon/lat` · `captured_at`(2026-07-29) |
 
-## 🚧 막힌 것 — ECW 파일을 못 엶
+## 🚧 막힌 것 — ECW 파일을 못 엶 (확정)
 
-`rasterio`/`gdalinfo` 둘 다 `.ecw`를 못 연다 — ECW는 Hexagon(옛
-ERDAS)의 **독점 코덱**이라 오픈소스 GDAL 빌드엔 디코더가 기본
-포함되지 않는다(라이선스 문제). 지금 QGIS를 설치해서 열어보는 중
-(QGIS는 ECW 플러그인을 번들하는 경우가 있음) — 그래도 안 되면
-**기업에 GeoTIFF(또는 JPEG2000) 포맷으로 재요청하는 게 가장
-확실한 해결책**.
+`rasterio`/`gdalinfo`뿐 아니라 **QGIS를 새로 설치해서 그 안에 번들된
+GDAL로도** 안 열린다 (`gdalinfo --formats`에 ECW가 아예 없음, QGIS
+GUI도 같은 GDAL 라이브러리를 쓰므로 결과는 같을 것). ECW는
+Hexagon(옛 ERDAS)의 **독점 코덱**이라 라이선스가 있는 SDK 없이는
+오픈소스 생태계 어떤 도구로도 못 연다.
+
+→ **기업에 GeoTIFF(또는 JPEG2000) 포맷으로 재요청하는 것 외에
+실질적인 대안이 없음.** 다음 Q&A나 자료 요청 때 1순위로 전달할 것.
 
 → 정사영상 픽셀 자체에 접근 못 해도, 아래 발견은 전부 GeoJSON·
 crops만으로 가능했던 것들.
